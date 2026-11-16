@@ -14,7 +14,7 @@ jobs:
     name: GitHub release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Tag matches manifest version
         run: |
           version=$(jq -r .version custom_components/safe_filters/manifest.json)
