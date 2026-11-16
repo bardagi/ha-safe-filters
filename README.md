@@ -31,11 +31,13 @@ sources ──► validate each ──► enough valid? ──► combine ──
 
 ## Installation
 
-### HACS
+### HACS (custom repository)
 
-[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bardagi&repository=ha-safe-filters&category=integration)
+Safe Filters is not in the HACS default store. Add it as a custom repository:
 
-Or manually: HACS → ⋮ → **Custom repositories** → add `https://github.com/bardagi/ha-safe-filters`, category **Integration**. Then install **Safe Filters** and restart Home Assistant.
+1. HACS → ⋮ → **Custom repositories**.
+2. Add `https://github.com/bardagi/ha-safe-filters`, category **Integration**.
+3. Install **Safe Filters** and restart Home Assistant.
 
 ### Manual
 
