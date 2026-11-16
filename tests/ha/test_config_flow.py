@@ -46,14 +46,28 @@ def sources(hass: HomeAssistant) -> None:
         set_temp(hass, entity_id, value)
 
 
-async def _start(hass: HomeAssistant) -> ConfigFlowResult:
+async def _start(hass: HomeAssistant, kind: str = "combine") -> ConfigFlowResult:
+    """Start a config flow and pick ``kind`` ("single" or "combine") from the menu."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    assert result["type"] is FlowResultType.FORM
+    assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "user"
+    assert result.get("menu_options") == ["single", "combine"]
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": kind}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == kind
     _assert_serializable(result)
     return result
+
+
+def _schema_keys(result: ConfigFlowResult) -> set[str]:
+    schema = result.get("data_schema")
+    assert schema is not None
+    return {str(key) for key in schema.schema}
 
 
 async def test_full_flow(hass: HomeAssistant) -> None:
@@ -64,6 +78,7 @@ async def test_full_flow(hass: HomeAssistant) -> None:
     )
     assert result["step_id"] == "quality"
     assert result["description_placeholders"] == {"unit": "°C"}
+    assert {"max_deviation", "min_sources"} <= _schema_keys(result)
     _assert_serializable(result)
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], QUALITY_INPUT)
@@ -162,7 +177,7 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert get_state(hass).state == "11.0"
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["step_id"] == "init"
+    assert result["step_id"] == "combine"
     _assert_serializable(result)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"entity_ids": SOURCES, "method": "max"}
@@ -183,3 +198,71 @@ async def test_options_flow(hass: HomeAssistant) -> None:
 
     # Entry was reloaded with the new options.
     assert get_state(hass).state == "12.0"
+
+
+SINGLE_QUALITY_INPUT = {"stale_after": 60.0, "hold_time": 15.0}
+
+
+async def test_single_flow(hass: HomeAssistant) -> None:
+    result = await _start(hass, "single")
+    assert _schema_keys(result) == {"name", "entity_id"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Outdoor", "entity_id": "sensor.temp_b"}
+    )
+    assert result["step_id"] == "quality"
+    assert result["description_placeholders"] == {"unit": "°C"}
+    # Comparing or counting sources is meaningless with one sensor.
+    assert _schema_keys(result).isdisjoint({"max_deviation", "min_sources"})
+    _assert_serializable(result)
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SINGLE_QUALITY_INPUT)
+    assert result["step_id"] == "filters"
+    _assert_serializable(result)
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], FILTERS_INPUT)
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Outdoor"
+    assert result["options"] == {
+        "name": "Outdoor",
+        "entity_id": "sensor.temp_b",
+        **SINGLE_QUALITY_INPUT,
+        **FILTERS_INPUT,
+    }
+    state = get_state(hass)
+    assert state.state == "12.0"
+    assert list(state.attributes["sources"]) == ["sensor.temp_b"]
+
+
+async def test_single_options_flow(hass: HomeAssistant) -> None:
+    result = await _start(hass, "single")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Outdoor", "entity_id": "sensor.temp_a"}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SINGLE_QUALITY_INPUT)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], FILTERS_INPUT)
+    await hass.async_block_till_done()
+    entry = result["result"]
+    assert get_state(hass).state == "10.0"
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "single"
+    assert _schema_keys(result) == {"entity_id"}
+    _assert_serializable(result)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"entity_id": "sensor.temp_c"}
+    )
+    assert result["step_id"] == "quality"
+    assert _schema_keys(result).isdisjoint({"max_deviation", "min_sources"})
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], SINGLE_QUALITY_INPUT
+    )
+    result = await hass.config_entries.options.async_configure(result["flow_id"], FILTERS_INPUT)
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["entity_id"] == "sensor.temp_c"
+    assert "entity_ids" not in entry.options
+    assert entry.options["name"] == "Outdoor"
+    assert get_state(hass).state == "11.0"

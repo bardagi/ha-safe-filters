@@ -3,6 +3,25 @@
     "step": {
       "user": {
         "title": "Nytt sikkert filter",
+        "description": "Rens og jevn ut én sensor, eller kombiner flere sensorer til én pålitelig verdi.",
+        "menu_options": {
+          "single": "Filtrer én sensor",
+          "combine": "Kombiner flere sensorer"
+        }
+      },
+      "single": {
+        "title": "Filtrer én sensor",
+        "description": "Gjør én sensor om til en pålitelig, utjevnet verdi. Målinger som er utilgjengelige, utdaterte eller utenfor gyldig område, ignoreres, og siste gode verdi beholdes en stund i stedet.",
+        "data": {
+          "name": "Navn",
+          "entity_id": "Kildesensor"
+        },
+        "data_description": {
+          "entity_id": "Sensoren som skal filtreres."
+        }
+      },
+      "combine": {
+        "title": "Kombiner flere sensorer",
         "description": "Kombiner flere sensorer til én pålitelig verdi. Kilder som er utilgjengelige, har sluttet å rapportere, er utenfor gyldig område eller avviker fra de andre, utelates automatisk.",
         "data": {
           "name": "Navn",
@@ -40,12 +59,12 @@
           "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Dette fanger døde enheter som beholder siste verdi. 0 slår av sjekken.",
           "max_deviation": "Med 3 eller flere gyldige kilder ignoreres en kilde som ligger lenger unna medianen av alle enn dette. La stå tomt for å slå av.",
           "min_sources": "Hvor mange kilder som må være gyldige for å beregne en ny verdi.",
-          "hold_time": "Når for få kilder er gyldige, vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."
+          "hold_time": "Når det ikke finnes noen gyldig måling (eller for få kilder er gyldige), vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."
         }
       },
       "filters": {
         "title": "Filtre",
-        "description": "Valgfrie filtre som brukes i denne rekkefølgen på den kombinerte verdien. Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
         "data": {
           "precision": "Desimaler"
         },
@@ -109,7 +128,17 @@
   },
   "options": {
     "step": {
-      "init": {
+      "single": {
+        "title": "Kilde",
+        "description": "Endre sensoren som skal filtreres.",
+        "data": {
+          "entity_id": "Kildesensor"
+        },
+        "data_description": {
+          "entity_id": "Sensoren som skal filtreres."
+        }
+      },
+      "combine": {
         "title": "Kilder",
         "description": "Endre sensorene og hvordan de kombineres.",
         "data": {
@@ -147,12 +176,12 @@
           "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Dette fanger døde enheter som beholder siste verdi. 0 slår av sjekken.",
           "max_deviation": "Med 3 eller flere gyldige kilder ignoreres en kilde som ligger lenger unna medianen av alle enn dette. La stå tomt for å slå av.",
           "min_sources": "Hvor mange kilder som må være gyldige for å beregne en ny verdi.",
-          "hold_time": "Når for få kilder er gyldige, vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."
+          "hold_time": "Når det ikke finnes noen gyldig måling (eller for få kilder er gyldige), vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."
         }
       },
       "filters": {
         "title": "Filtre",
-        "description": "Valgfrie filtre som brukes i denne rekkefølgen på den kombinerte verdien. Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
         "data": {
           "precision": "Desimaler"
         },

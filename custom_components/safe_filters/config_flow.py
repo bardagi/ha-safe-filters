@@ -16,10 +16,12 @@ from homeassistant.helpers.schema_config_entry_flow import (
     SchemaConfigFlowHandler,
     SchemaFlowError,
     SchemaFlowFormStep,
+    SchemaFlowMenuStep,
 )
 
 from .const import (
     CONF_ENABLED,
+    CONF_ENTITY_ID,
     CONF_ENTITY_IDS,
     CONF_HOLD_TIME,
     CONF_LOWPASS,
@@ -53,7 +55,7 @@ from .const import (
     DEFAULT_WEIGHT,
     DOMAIN,
 )
-from .engine import CombineMethod
+from .engine import CombineMethod, is_single, source_ids
 from .units import units_compatible
 
 if TYPE_CHECKING:
@@ -65,6 +67,10 @@ else:
         import voluptuous as vol
 
 UNIT_MINUTES = "min"
+SOURCE_DOMAINS = [SENSOR_DOMAIN, NUMBER_DOMAIN, INPUT_NUMBER_DOMAIN]
+
+STEP_SINGLE = "single"
+STEP_COMBINE = "combine"
 
 
 def _number(
@@ -84,14 +90,22 @@ def _number(
     return selector.NumberSelector(config)
 
 
-SOURCES_SCHEMA = vol.Schema(
+NAME_SCHEMA = vol.Schema({vol.Required(CONF_NAME): selector.TextSelector()})
+
+SINGLE_SOURCE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_ENTITY_ID): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=SOURCE_DOMAINS)
+        ),
+    }
+)
+
+SINGLE_USER_SCHEMA = NAME_SCHEMA.extend(SINGLE_SOURCE_SCHEMA.schema)
+
+COMBINE_SOURCES_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTITY_IDS): selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                domain=[SENSOR_DOMAIN, NUMBER_DOMAIN, INPUT_NUMBER_DOMAIN],
-                multiple=True,
-                reorder=True,
-            )
+            selector.EntitySelectorConfig(domain=SOURCE_DOMAINS, multiple=True, reorder=True)
         ),
         vol.Required(CONF_METHOD, default=DEFAULT_METHOD.value): selector.SelectSelector(
             selector.SelectSelectorConfig(
@@ -103,26 +117,35 @@ SOURCES_SCHEMA = vol.Schema(
     }
 )
 
-USER_SCHEMA = vol.Schema({vol.Required(CONF_NAME): selector.TextSelector()}).extend(
-    SOURCES_SCHEMA.schema
-)
+COMBINE_USER_SCHEMA = NAME_SCHEMA.extend(COMBINE_SOURCES_SCHEMA.schema)
 
-QUALITY_SCHEMA = vol.Schema(
-    {
+
+def _build_quality_schema(*, multiple_sources: bool) -> vol.Schema:
+    fields: dict[vol.Marker, Any] = {
         vol.Optional(CONF_MIN_VALUE): _number(),
         vol.Optional(CONF_MAX_VALUE): _number(),
         vol.Required(CONF_STALE_AFTER, default=DEFAULT_STALE_AFTER): _number(
             min_value=0, max_value=10080, step=1, unit=UNIT_MINUTES
         ),
-        vol.Optional(CONF_MAX_DEVIATION): _number(min_value=0),
-        vol.Required(CONF_MIN_SOURCES, default=DEFAULT_MIN_SOURCES): _number(
-            min_value=1, max_value=50, step=1
-        ),
-        vol.Required(CONF_HOLD_TIME, default=DEFAULT_HOLD_TIME): _number(
-            min_value=0, max_value=10080, step=1, unit=UNIT_MINUTES
-        ),
     }
-)
+    if multiple_sources:
+        # Comparing and counting sources only makes sense with more than one.
+        fields[vol.Optional(CONF_MAX_DEVIATION)] = _number(min_value=0)
+        fields[vol.Required(CONF_MIN_SOURCES, default=DEFAULT_MIN_SOURCES)] = _number(
+            min_value=1, max_value=50, step=1
+        )
+    fields[vol.Required(CONF_HOLD_TIME, default=DEFAULT_HOLD_TIME)] = _number(
+        min_value=0, max_value=10080, step=1, unit=UNIT_MINUTES
+    )
+    return vol.Schema(fields)
+
+
+COMBINE_QUALITY_SCHEMA = _build_quality_schema(multiple_sources=True)
+SINGLE_QUALITY_SCHEMA = _build_quality_schema(multiple_sources=False)
+
+
+async def _quality_schema(handler: SchemaCommonFlowHandler) -> vol.Schema:
+    return SINGLE_QUALITY_SCHEMA if is_single(handler.options) else COMBINE_QUALITY_SCHEMA
 
 
 def _filter_section(options: Mapping[str, Any], key: str, fields: dict[vol.Marker, Any]) -> section:
@@ -213,7 +236,7 @@ async def _weights_placeholders(handler: SchemaCommonFlowHandler) -> dict[str, s
 
 async def _unit_placeholders(handler: SchemaCommonFlowHandler) -> dict[str, str]:
     hass = handler.parent_handler.hass
-    for entity_id in handler.options.get(CONF_ENTITY_IDS, []):
+    for entity_id in source_ids(handler.options):
         if (state := hass.states.get(entity_id)) and (
             unit := state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
         ):
@@ -242,7 +265,7 @@ async def _validate_quality(
     max_value = user_input.get(CONF_MAX_VALUE)
     if min_value is not None and max_value is not None and min_value >= max_value:
         raise SchemaFlowError("min_not_below_max")
-    source_count = len(handler.options.get(CONF_ENTITY_IDS, []))
+    source_count = len(source_ids(handler.options))
     if user_input.get(CONF_MIN_SOURCES, DEFAULT_MIN_SOURCES) > source_count:
         raise SchemaFlowError("min_sources_too_high")
     return user_input
@@ -264,11 +287,16 @@ async def _next_after_sources(options: dict[str, Any]) -> str:
     return "quality"
 
 
+async def _choose_source_step(options: dict[str, Any]) -> str:
+    """Open the options flow on the source form that matches the entry's kind."""
+    return STEP_SINGLE if is_single(options) else STEP_COMBINE
+
+
 WEIGHTS_STEP = SchemaFlowFormStep(
     _weights_schema, next_step="quality", description_placeholders=_weights_placeholders
 )
 QUALITY_STEP = SchemaFlowFormStep(
-    QUALITY_SCHEMA,
+    _quality_schema,
     validate_user_input=_validate_quality,
     next_step="filters",
     description_placeholders=_unit_placeholders,
@@ -280,8 +308,10 @@ FILTERS_STEP = SchemaFlowFormStep(
 )
 
 CONFIG_FLOW = {
-    "user": SchemaFlowFormStep(
-        USER_SCHEMA, validate_user_input=_validate_sources, next_step=_next_after_sources
+    "user": SchemaFlowMenuStep([STEP_SINGLE, STEP_COMBINE]),
+    STEP_SINGLE: SchemaFlowFormStep(SINGLE_USER_SCHEMA, next_step="quality"),
+    STEP_COMBINE: SchemaFlowFormStep(
+        COMBINE_USER_SCHEMA, validate_user_input=_validate_sources, next_step=_next_after_sources
     ),
     "weights": WEIGHTS_STEP,
     "quality": QUALITY_STEP,
@@ -289,8 +319,13 @@ CONFIG_FLOW = {
 }
 
 OPTIONS_FLOW = {
-    "init": SchemaFlowFormStep(
-        SOURCES_SCHEMA, validate_user_input=_validate_sources, next_step=_next_after_sources
+    # No form of its own: goes straight to the single or combine source form.
+    "init": SchemaFlowFormStep(next_step=_choose_source_step),
+    STEP_SINGLE: SchemaFlowFormStep(SINGLE_SOURCE_SCHEMA, next_step="quality"),
+    STEP_COMBINE: SchemaFlowFormStep(
+        COMBINE_SOURCES_SCHEMA,
+        validate_user_input=_validate_sources,
+        next_step=_next_after_sources,
     ),
     "weights": WEIGHTS_STEP,
     "quality": QUALITY_STEP,

@@ -93,7 +93,7 @@ class SafeFilterExtraStoredData(SensorExtraStoredData):
 
 
 class SafeFilterSensor(RestoreSensor):
-    """Combines and filters several source sensors into one trustworthy value."""
+    """Validates, combines and filters one or more source sensors into one trustworthy value."""
 
     _attr_should_poll = False
     _attr_state_class = SensorStateClass.MEASUREMENT

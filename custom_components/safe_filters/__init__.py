@@ -1,4 +1,4 @@
-"""Safe Filters: combine several sensors into one trustworthy, filtered value."""
+"""Safe Filters: filter one sensor, or combine several, into one trustworthy value."""
 
 from __future__ import annotations
 

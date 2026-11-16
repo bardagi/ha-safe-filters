@@ -5,6 +5,7 @@ from typing import Final
 
 from .engine.options import (
     CONF_ENABLED,
+    CONF_ENTITY_ID,
     CONF_ENTITY_IDS,
     CONF_HOLD_TIME,
     CONF_LOWPASS,
@@ -55,6 +56,7 @@ __all__ = [
     "ATTR_STATUS",
     "ATTR_VALID_SOURCES",
     "CONF_ENABLED",
+    "CONF_ENTITY_ID",
     "CONF_ENTITY_IDS",
     "CONF_HOLD_TIME",
     "CONF_LOWPASS",

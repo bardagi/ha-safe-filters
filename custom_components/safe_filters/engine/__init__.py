@@ -1,7 +1,7 @@
 """Pure-Python processing engine for Safe Filters (no Home Assistant imports)."""
 
 from .combine import CombineMethod, combine
-from .options import build_config
+from .options import build_config, is_single, source_ids
 from .pipeline import (
     OutlierConfig,
     Pipeline,
@@ -29,5 +29,7 @@ __all__ = [
     "ValidationConfig",
     "build_config",
     "combine",
+    "is_single",
+    "source_ids",
     "validate",
 ]

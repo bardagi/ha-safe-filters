@@ -3,6 +3,25 @@
     "step": {
       "user": {
         "title": "New safe filter",
+        "description": "Clean up and smooth one sensor, or combine several sensors into one trustworthy value.",
+        "menu_options": {
+          "single": "Filter one sensor",
+          "combine": "Combine several sensors"
+        }
+      },
+      "single": {
+        "title": "Filter one sensor",
+        "description": "Turn one sensor into a trustworthy, smoothed value. Readings that are unavailable, stale or out of range are ignored, and the last good value is held for a while instead.",
+        "data": {
+          "name": "Name",
+          "entity_id": "Source sensor"
+        },
+        "data_description": {
+          "entity_id": "The sensor to filter."
+        }
+      },
+      "combine": {
+        "title": "Combine several sensors",
         "description": "Combine several sensors into one trustworthy value. Sources that are unavailable, stale, out of range or disagree with the others are left out automatically.",
         "data": {
           "name": "Name",
@@ -40,12 +59,12 @@
           "stale_after": "A source that has not reported for this long is ignored. This catches dead devices that keep their last value. 0 turns the check off.",
           "max_deviation": "With 3 or more valid sources, a source further than this from the median of all of them is ignored. Leave empty to turn off.",
           "min_sources": "How many sources must be valid to compute a new value.",
-          "hold_time": "When too few sources are valid, keep showing the last good value this long, then become unavailable. Also covers restarts."
+          "hold_time": "When there is no valid reading (or too few valid sources), keep showing the last good value this long, then become unavailable. Also covers restarts."
         }
       },
       "filters": {
         "title": "Filters",
-        "description": "Optional filters, applied in this order to the combined value. Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough.",
+        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough.",
         "data": {
           "precision": "Decimals"
         },
@@ -109,7 +128,17 @@
   },
   "options": {
     "step": {
-      "init": {
+      "single": {
+        "title": "Source",
+        "description": "Change the sensor to filter.",
+        "data": {
+          "entity_id": "Source sensor"
+        },
+        "data_description": {
+          "entity_id": "The sensor to filter."
+        }
+      },
+      "combine": {
         "title": "Sources",
         "description": "Change the sensors and how they are combined.",
         "data": {
@@ -147,12 +176,12 @@
           "stale_after": "A source that has not reported for this long is ignored. This catches dead devices that keep their last value. 0 turns the check off.",
           "max_deviation": "With 3 or more valid sources, a source further than this from the median of all of them is ignored. Leave empty to turn off.",
           "min_sources": "How many sources must be valid to compute a new value.",
-          "hold_time": "When too few sources are valid, keep showing the last good value this long, then become unavailable. Also covers restarts."
+          "hold_time": "When there is no valid reading (or too few valid sources), keep showing the last good value this long, then become unavailable. Also covers restarts."
         }
       },
       "filters": {
         "title": "Filters",
-        "description": "Optional filters, applied in this order to the combined value. Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough.",
+        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough.",
         "data": {
           "precision": "Decimals"
         },

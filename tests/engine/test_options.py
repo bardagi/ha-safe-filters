@@ -1,6 +1,11 @@
 """Tests for turning config entry options into a pipeline config."""
 
-from custom_components.safe_filters.engine import CombineMethod, build_config
+from custom_components.safe_filters.engine import (
+    CombineMethod,
+    build_config,
+    is_single,
+    source_ids,
+)
 
 
 def test_full_options() -> None:
@@ -67,3 +72,37 @@ def test_zero_rate_limit_is_ignored() -> None:
 def test_stale_zero_disables() -> None:
     config = build_config({"entity_ids": ["sensor.a"], "method": "min", "stale_after": 0})
     assert config.validation.stale_after_s == 0.0
+
+
+def test_single_source_options() -> None:
+    config = build_config(
+        {
+            "name": "Wind",
+            "entity_id": "sensor.wind",
+            "min_value": 0.0,
+            "max_value": 75.0,
+            "stale_after": 30.0,
+            "hold_time": 15.0,
+            "lowpass": {"enabled": True, "time_constant": 3.0},
+            "precision": 1.0,
+        }
+    )
+    assert config.sources == ("sensor.wind",)
+    assert config.method is CombineMethod.PRIORITY
+    assert config.weights == {}
+    assert config.min_sources == 1
+    assert config.validation.max_deviation is None
+    assert config.validation.max_value == 75.0
+    assert config.validation.stale_after_s == 1800.0
+    assert config.hold_time_s == 900.0
+    assert config.lowpass_time_constant_s == 180.0
+
+
+def test_source_ids_and_is_single() -> None:
+    single = {"entity_id": "sensor.a"}
+    combine = {"entity_ids": ["sensor.b", "sensor.a"], "method": "priority"}
+    assert is_single(single)
+    assert not is_single(combine)
+    assert source_ids(single) == ("sensor.a",)
+    assert source_ids(combine) == ("sensor.b", "sensor.a")
+    assert source_ids({}) == ()

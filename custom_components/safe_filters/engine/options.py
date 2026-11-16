@@ -14,7 +14,10 @@ from .pipeline import OutlierConfig, PipelineConfig
 from .validation import ValidationConfig
 
 CONF_NAME = "name"
+CONF_ENTITY_ID = "entity_id"
+"""The source of a single-sensor filter. Its presence marks the entry as single."""
 CONF_ENTITY_IDS = "entity_ids"
+"""The sources of a filter that combines several sensors."""
 CONF_METHOD = "method"
 CONF_WEIGHTS = "weights"
 
@@ -52,10 +55,26 @@ DEFAULT_PRECISION = 1
 SECONDS_PER_MINUTE = 60.0
 
 
+def is_single(options: Mapping[str, Any]) -> bool:
+    """Return True if the options describe a filter for one sensor."""
+    return CONF_ENTITY_ID in options
+
+
+def source_ids(options: Mapping[str, Any]) -> tuple[str, ...]:
+    """The source entity ids, in priority order, for either kind of entry."""
+    if is_single(options):
+        return (options[CONF_ENTITY_ID],)
+    return tuple(options.get(CONF_ENTITY_IDS, ()))
+
+
 def build_config(options: Mapping[str, Any]) -> PipelineConfig:
     """Turn config entry options into a :class:`PipelineConfig`."""
-    sources = tuple(options.get(CONF_ENTITY_IDS, ()))
-    method = CombineMethod(options.get(CONF_METHOD, DEFAULT_METHOD))
+    sources = source_ids(options)
+    method = (
+        CombineMethod.PRIORITY
+        if is_single(options)
+        else CombineMethod(options.get(CONF_METHOD, DEFAULT_METHOD))
+    )
 
     weights: dict[str, float] = {}
     if method is CombineMethod.WEIGHTED_MEAN:

@@ -6,9 +6,9 @@
 [![Validate](https://github.com/bardagi/ha-safe-filters/actions/workflows/validate.yml/badge.svg)](https://github.com/bardagi/ha-safe-filters/actions/workflows/validate.yml)
 [![Tests](https://github.com/bardagi/ha-safe-filters/actions/workflows/tests.yml/badge.svg)](https://github.com/bardagi/ha-safe-filters/actions/workflows/tests.yml)
 
-A helper that combines several sensors into **one trustworthy value**. It ignores sources that are unavailable, stale, out of range or obviously wrong. It smooths the result with time-based filters and survives restarts without garbage readings.
+A helper that turns **one sensor, or several combined**, into **one trustworthy value**. It ignores readings that are unavailable, stale, out of range or obviously wrong. It smooths the result with time-based filters and survives restarts without garbage readings.
 
-It replaces chains like `min_max` → `filter` → `statistics` with a single helper you set up in the UI.
+It replaces a YAML `filter` sensor for a single noisy sensor, and chains like `min_max` → `filter` → `statistics` for several, with one helper you set up in the UI.
 
 ```
 sources ──► validate each ──► enough valid? ──► combine ──► spike     ──► rate  ──► low-pass ──► moving  ──► round
@@ -47,15 +47,19 @@ Requires Home Assistant 2025.8 or newer. The integration icon is shipped with th
 
 ## Setup
 
-**Settings → Devices & services → Helpers → Create helper → Safe Filters.**
-Every option can be changed later from the helper's **Configure** button.
+**Settings → Devices & services → Helpers → Create helper → Safe Filters**, then choose:
+
+- **Filter one sensor**: validate and smooth a single sensor. A bad reading is ignored and the last good value is held instead.
+- **Combine several sensors**: merge several sensors into one value, leaving out the ones that can't be trusted.
+
+Every option except this choice can be changed later from the helper's **Configure** button.
 
 ### 1. Sources
 
 | Option | Description |
 |---|---|
-| Source sensors | `sensor`, `number` or `input_number` entities. Drag to reorder; with *Priority*, the first valid one is used. Units are converted automatically when possible (°F → °C, mbar → hPa, …). |
-| Combine method | `min`, `max`, `mean`, `median`, `weighted_mean`, `priority` (first valid source). |
+| Source sensor(s) | `sensor`, `number` or `input_number` entities. When combining, drag to reorder; with *Priority*, the first valid one is used. Units are converted automatically when possible (°F → °C, mbar → hPa, …). |
+| Combine method | Combine only: `min`, `max`, `mean`, `median`, `weighted_mean`, `priority` (first valid source). |
 
 With `weighted_mean`, an extra step asks for a weight per source. Weights are renormalised over the sources that are valid at the time.
 
@@ -65,9 +69,9 @@ With `weighted_mean`, an extra step asks for a weight per source. Weights are re
 |---|---|---|
 | Lowest / highest plausible value | – | Readings outside this range are ignored. |
 | Stale after | 120 min | A `sensor` that hasn't reported for this long is ignored. `0` = off. Not applied to `number`/`input_number`. |
-| Max deviation | – | With ≥ 3 valid sources, ignore a source further than this from their median. |
-| Minimum valid sources | 1 | Fewer valid sources than this = no new value. |
-| Hold last value for | 30 min | When there are too few valid sources, keep showing the last good value (status `holding`), then become `unavailable`. Also limits how old a value restored after a restart may be. |
+| Max deviation | – | Combine only. With ≥ 3 valid sources, ignore a source further than this from their median. |
+| Minimum valid sources | 1 | Combine only. Fewer valid sources than this = no new value. |
+| Hold last value for | 30 min | When there is no valid reading (or too few valid sources), keep showing the last good value (status `holding`), then become `unavailable`. Also limits how old a value restored after a restart may be. |
 
 ### 3. Filters (applied in this order)
 
@@ -85,9 +89,9 @@ Each smoother adds delay. Usually *one* of low-pass or moving average is enough.
 
 | Attribute | Meaning |
 |---|---|
-| `status` | `ok`, `holding` (too few valid sources, showing the last good value) or `restored` (value from before a restart, waiting for fresh data). |
-| `valid_sources` | Number of sources used right now. |
-| `combined_value` | Combined value before filtering. |
+| `status` | `ok`, `holding` (no valid reading or too few valid sources, showing the last good value) or `restored` (value from before a restart, waiting for fresh data). |
+| `valid_sources` | Number of sources used right now (0 or 1 when filtering one sensor). |
+| `combined_value` | Value before filtering: the combined value, or the source's own value when filtering one sensor. |
 | `sources` | Per source: converted value and status (`ok`, `unavailable`, `non_numeric`, `unit_mismatch`, `out_of_range`, `stale`, `deviation`). |
 
 `valid_sources`, `combined_value` and `sources` are excluded from the recorder. To avoid a new state (and recorder row) on every source report, the state is written right away only when the value, `status`, availability or a source's status changes. Changes to `combined_value` and the per-source values alone are written at most once a minute.
@@ -108,7 +112,11 @@ These are starting points. Adjust them to how often your sensors report.
 - Moving average 10 min. Decimals 0.
 
 **Wind speed from one sensor**
-- Method `priority`; range 0 to 75 m/s; low-pass 3–5 min.
+- **Filter one sensor**; range 0 to 75 m/s; low-pass 3–5 min.
+
+**A noisy single sensor (e.g. CO₂ or power)**
+- **Filter one sensor**; set a plausible range (e.g. 300 to 5000 ppm).
+- Spike rejection: window 5, radius sized to a believable jump. Low-pass 2–5 min. Decimals 0.
 
 **Air pressure**
 - Method `median` (or `mean` with two sensors); range 930 to 1070 hPa.

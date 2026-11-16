@@ -23,7 +23,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache_with_extra_data,
 )
 
-from .conftest import ENTITY_ID, SOURCES, get_state, set_temp, setup_entry
+from .conftest import ENTITY_ID, SOURCES, get_state, set_temp, setup_entry, single_options
 
 
 async def _tick(hass: HomeAssistant, freezer: FrozenDateTimeFactory, minutes: float) -> None:
@@ -143,6 +143,58 @@ async def test_hold_then_unavailable(hass: HomeAssistant, freezer: FrozenDateTim
     state = get_state(hass)
     assert state.state == "8.0"
     assert state.attributes["status"] == "ok"
+
+
+async def test_single_sensor_validates_and_holds(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    set_temp(hass, "sensor.temp_a", 7.0)
+    await setup_entry(hass, single_options(hold_time=10.0, max_value=60.0))
+
+    state = get_state(hass)
+    assert state.state == "7.0"
+    assert state.attributes["status"] == "ok"
+    assert state.attributes["valid_sources"] == 1
+    assert state.attributes["combined_value"] == 7.0
+    assert state.attributes["sources"] == {"sensor.temp_a": {"value": 7.0, "status": "ok"}}
+    assert state.attributes[ATTR_UNIT_OF_MEASUREMENT] == UnitOfTemperature.CELSIUS
+    assert state.attributes[ATTR_DEVICE_CLASS] == "temperature"
+
+    # A glitch is ignored: the last good value is held.
+    set_temp(hass, "sensor.temp_a", 999.0)
+    await hass.async_block_till_done()
+    state = get_state(hass)
+    assert state.state == "7.0"
+    assert state.attributes["status"] == "holding"
+    assert state.attributes["valid_sources"] == 0
+    assert state.attributes["sources"]["sensor.temp_a"]["status"] == "out_of_range"
+
+    await _tick(hass, freezer, 9)
+    assert get_state(hass).state == "7.0"
+
+    await _tick(hass, freezer, 2)
+    assert get_state(hass).state == STATE_UNAVAILABLE
+
+    set_temp(hass, "sensor.temp_a", 8.0)
+    await hass.async_block_till_done()
+    state = get_state(hass)
+    assert state.state == "8.0"
+    assert state.attributes["status"] == "ok"
+
+
+async def test_single_sensor_is_smoothed(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    set_temp(hass, "sensor.temp_a", 0.0)
+    await setup_entry(
+        hass, single_options(lowpass={"enabled": True, "time_constant": 5.0}, precision=2.0)
+    )
+    set_temp(hass, "sensor.temp_a", 10.0)
+    await hass.async_block_till_done()
+    assert float(get_state(hass).state) < 1.0
+
+    await _tick(hass, freezer, 5)
+    assert 5.5 < float(get_state(hass).state) < 7.0
 
 
 async def test_unit_conversion(hass: HomeAssistant) -> None:
