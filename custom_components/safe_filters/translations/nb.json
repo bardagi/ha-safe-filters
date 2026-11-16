@@ -103,7 +103,8 @@
       "duplicate_sources": "Samme sensor er valgt mer enn én gang.",
       "incompatible_units": "De valgte sensorene har enheter som ikke kan konverteres til hverandre.",
       "min_not_below_max": "Laveste plausible verdi må være lavere enn høyeste.",
-      "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer."
+      "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer.",
+      "max_rate_not_positive": "Maks endring per minutt må være større enn 0."
     }
   },
   "options": {
@@ -209,7 +210,8 @@
       "duplicate_sources": "Samme sensor er valgt mer enn én gang.",
       "incompatible_units": "De valgte sensorene har enheter som ikke kan konverteres til hverandre.",
       "min_not_below_max": "Laveste plausible verdi må være lavere enn høyeste.",
-      "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer."
+      "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer.",
+      "max_rate_not_positive": "Maks endring per minutt må være større enn 0."
     }
   },
   "selector": {

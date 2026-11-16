@@ -52,6 +52,18 @@ def test_minimal_options_use_defaults() -> None:
     assert config.precision == 1
 
 
+def test_zero_rate_limit_is_ignored() -> None:
+    """A saved rate of 0 would freeze the value forever."""
+    config = build_config(
+        {
+            "entity_ids": ["sensor.a"],
+            "method": "min",
+            "rate_limit": {"enabled": True, "max_rate": 0},
+        }
+    )
+    assert config.max_rate_per_min is None
+
+
 def test_stale_zero_disables() -> None:
     config = build_config({"entity_ids": ["sensor.a"], "method": "min", "stale_after": 0})
     assert config.validation.stale_after_s == 0.0

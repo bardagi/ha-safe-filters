@@ -103,7 +103,8 @@
       "duplicate_sources": "The same sensor is selected more than once.",
       "incompatible_units": "The selected sensors have units that cannot be converted to each other.",
       "min_not_below_max": "The lowest plausible value must be lower than the highest.",
-      "min_sources_too_high": "Minimum valid sources can't be higher than the number of selected sensors."
+      "min_sources_too_high": "Minimum valid sources can't be higher than the number of selected sensors.",
+      "max_rate_not_positive": "Max change per minute must be greater than 0."
     }
   },
   "options": {
@@ -209,7 +210,8 @@
       "duplicate_sources": "The same sensor is selected more than once.",
       "incompatible_units": "The selected sensors have units that cannot be converted to each other.",
       "min_not_below_max": "The lowest plausible value must be lower than the highest.",
-      "min_sources_too_high": "Minimum valid sources can't be higher than the number of selected sensors."
+      "min_sources_too_high": "Minimum valid sources can't be higher than the number of selected sensors.",
+      "max_rate_not_positive": "Max change per minute must be greater than 0."
     }
   },
   "selector": {

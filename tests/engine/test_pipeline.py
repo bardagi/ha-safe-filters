@@ -99,7 +99,8 @@ def test_short_dropout_keeps_filter_state() -> None:
     pipeline = make(hold_time_s=600, lowpass_time_constant_s=300)
     pipeline.evaluate(readings(10.0, 10.0, 10.0), 0, True)
     pipeline.evaluate(readings(None, None, None), 60, True)
-    result = pipeline.evaluate(readings(20.0, 20.0, 20.0), 120, True)
+    assert pipeline.evaluate(readings(20.0, 20.0, 20.0), 120, True).value == 10.0
+    result = pipeline.evaluate(readings(20.0, 20.0, 20.0), 180, False)
     assert 10.0 < value_of(result) < 20.0  # smoothed, not reset
 
 

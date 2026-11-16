@@ -96,10 +96,11 @@ class RateLimitStage(Stage):
         if self._output is None or self._time is None:
             self._output, self._time = value, now
             return value
+        # A clock that went backwards gives dt = 0 for this step only.
         max_step = self.max_rate_per_min * max(0.0, now - self._time) / 60.0
         delta = min(max(value - self._output, -max_step), max_step)
         self._output = value if abs(value - self._output) <= max_step else self._output + delta
-        self._time = max(self._time, now)
+        self._time = now
         return self._output
 
     def reset(self) -> None:
@@ -121,6 +122,9 @@ class LowPassStage(Stage):
     Unlike Home Assistant's built-in ``lowpass`` filter (whose time constant is
     counted in *samples*), the smoothing here depends on real elapsed time, so it
     behaves the same whether a sensor reports every 10 seconds or every 5 minutes.
+
+    The input is held at its previous value until a new one arrives (as in the
+    moving average), so a new reading only affects the output from that moment on.
     """
 
     kind = "lowpass"
@@ -128,28 +132,40 @@ class LowPassStage(Stage):
     def __init__(self, time_constant_s: float) -> None:
         self.time_constant_s = max(0.0, float(time_constant_s))
         self._output: float | None = None
+        self._input: float | None = None
         self._time: float | None = None
 
     def process(self, value: float, now: float, new_sample: bool) -> float:
-        if self._output is None or self._time is None or self.time_constant_s == 0:
-            self._output, self._time = value, now
+        if (
+            self._output is None
+            or self._input is None
+            or self._time is None
+            or self.time_constant_s == 0
+        ):
+            self._output, self._input, self._time = value, value, now
             return value
+        # A clock that went backwards gives dt = 0 for this step only.
         dt = max(0.0, now - self._time)
-        alpha = 1.0 - math.exp(-dt / self.time_constant_s)
-        self._output += alpha * (value - self._output)
-        self._time = max(self._time, now)
+        decay = math.exp(-dt / self.time_constant_s)
+        self._output = self._input + (self._output - self._input) * decay
+        self._input = value
+        self._time = now
         return self._output
 
     def reset(self) -> None:
         self._output = None
+        self._input = None
         self._time = None
 
     def dump(self) -> dict[str, Any]:
-        return {"output": self._output, "time": self._time}
+        return {"output": self._output, "input": self._input, "time": self._time}
 
     def load(self, data: Mapping[str, Any]) -> None:
         output, time = data["output"], data["time"]
+        # State saved before "input" existed: assume the output had settled.
+        value_in = data.get("input", output)
         self._output = None if output is None else float(output)
+        self._input = None if value_in is None else float(value_in)
         self._time = None if time is None else float(time)
 
 

@@ -72,7 +72,7 @@ With `weighted_mean`, an extra step asks for a weight per source. Weights are re
 | Stage | Settings | Notes |
 |---|---|---|
 | 1. Spike rejection | window (samples), max distance from median | A sample further than this from the window's median is ignored. A real, lasting change gets through after about half a window. |
-| 2. Rate limit | max change per minute | Clamps how fast the value may move. |
+| 2. Rate limit | max change per minute | Clamps how fast the value may move. Must be greater than 0. |
 | 3. Low-pass | time constant (min) | Exponential smoothing on real time: after one time constant the output has moved ~63 % toward a new level. |
 | 4. Moving average | window (min) | Time-weighted average. |
 | Decimals | default 1 | Rounding of the final value only. |
@@ -88,7 +88,9 @@ Each smoother adds delay. Usually *one* of low-pass or moving average is enough.
 | `combined_value` | Combined value before filtering. |
 | `sources` | Per source: converted value and status (`ok`, `unavailable`, `non_numeric`, `unit_mismatch`, `out_of_range`, `stale`, `deviation`). |
 
-`valid_sources`, `combined_value` and `sources` are excluded from the recorder to keep the database small. The sensor has `state_class: measurement`, so long-term statistics work. For values like "min/max last 24 h" or "change last hour", add a built-in **Statistics** helper on top of the safe filter.
+`valid_sources`, `combined_value` and `sources` are excluded from the recorder. To avoid a new state (and recorder row) on every source report, the state is written right away only when the value, `status`, availability or a source's status changes. Changes to `combined_value` and the per-source values alone are written at most once a minute.
+
+The sensor has `state_class: measurement` (`total` for energy, gas, water and monetary sources, which Home Assistant doesn't allow as `measurement`), so long-term statistics work. For values like "min/max last 24 h" or "change last hour", add a built-in **Statistics** helper on top of the safe filter.
 
 ## Recipes
 

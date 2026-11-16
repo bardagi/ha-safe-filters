@@ -4,17 +4,21 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.const import (
     ATTR_DEVICE_CLASS,
     ATTR_UNIT_OF_MEASUREMENT,
     EVENT_HOMEASSISTANT_STARTED,
+    EVENT_STATE_CHANGED,
     STATE_UNAVAILABLE,
+    UnitOfEnergy,
     UnitOfTemperature,
 )
 from homeassistant.core import CoreState, HomeAssistant, State
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
+    async_capture_events,
     async_fire_time_changed,
     mock_restore_cache_with_extra_data,
 )
@@ -26,6 +30,31 @@ async def _tick(hass: HomeAssistant, freezer: FrozenDateTimeFactory, minutes: fl
     freezer.tick(timedelta(minutes=minutes))
     async_fire_time_changed(hass, dt_util.utcnow())
     await hass.async_block_till_done()
+
+
+def _mock_restored(hass: HomeAssistant, value: float, age_s: float) -> None:
+    """Pretend the sensor showed ``value`` (°C), last good ``age_s`` seconds ago."""
+    now = dt_util.utcnow().timestamp()
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(ENTITY_ID, str(value)),
+                {
+                    "native_value": value,
+                    "native_unit_of_measurement": UnitOfTemperature.CELSIUS,
+                    "device_class": "temperature",
+                    "pipeline": {
+                        "version": 1,
+                        "fingerprint": "does-not-match",
+                        "value": value,
+                        "last_good": now - age_s,
+                        "stages": {},
+                    },
+                },
+            )
+        ],
+    )
 
 
 async def test_combines_sources(hass: HomeAssistant) -> None:
@@ -152,28 +181,47 @@ async def test_lowpass_smooths_over_time(
     assert 5.5 < float(get_state(hass).state) < 7.0
 
 
+async def test_diagnostic_changes_wait_for_tick(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A source change that doesn't change the output isn't written right away."""
+    for entity_id, value in zip(SOURCES, (10.0, 12.0, 11.0), strict=True):
+        set_temp(hass, entity_id, value)
+    await setup_entry(hass)
+    assert get_state(hass).state == "11.0"
+
+    events = async_capture_events(hass, EVENT_STATE_CHANGED)
+    set_temp(hass, "sensor.temp_b", 12.5)  # not the median
+    await hass.async_block_till_done()
+    assert [event for event in events if event.data["entity_id"] == ENTITY_ID] == []
+    assert get_state(hass).attributes["sources"]["sensor.temp_b"]["value"] == 12.0
+
+    await _tick(hass, freezer, 1)
+    state = get_state(hass)
+    assert state.state == "11.0"
+    assert state.attributes["sources"]["sensor.temp_b"]["value"] == 12.5
+
+
+async def test_energy_sources_use_total_state_class(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    for entity_id, value in zip(SOURCES, (100.0, 101.0, 102.0), strict=True):
+        hass.states.async_set(
+            entity_id,
+            str(value),
+            {ATTR_UNIT_OF_MEASUREMENT: UnitOfEnergy.KILO_WATT_HOUR, ATTR_DEVICE_CLASS: "energy"},
+        )
+    await setup_entry(hass, method="max")
+
+    state = get_state(hass)
+    assert state.state == "102.0"
+    assert state.attributes[ATTR_DEVICE_CLASS] == "energy"
+    assert state.attributes["state_class"] == "total"
+    assert "impossible" not in caplog.text
+
+
 async def test_restores_value_during_startup(hass: HomeAssistant) -> None:
-    now = dt_util.utcnow().timestamp()
-    mock_restore_cache_with_extra_data(
-        hass,
-        [
-            (
-                State(ENTITY_ID, "9.5"),
-                {
-                    "native_value": 9.5,
-                    "native_unit_of_measurement": UnitOfTemperature.CELSIUS,
-                    "device_class": "temperature",
-                    "pipeline": {
-                        "version": 1,
-                        "fingerprint": "does-not-match",
-                        "value": 9.5,
-                        "last_good": now - 120,
-                        "stages": {},
-                    },
-                },
-            )
-        ],
-    )
+    _mock_restored(hass, 9.5, age_s=120)
     hass.set_state(CoreState.not_running)
     # Only one (misleading) source has loaded so far.
     set_temp(hass, "sensor.temp_a", 25.0)
@@ -201,29 +249,22 @@ async def test_restores_value_during_startup(hass: HomeAssistant) -> None:
 
 
 async def test_old_restored_value_is_not_used(hass: HomeAssistant) -> None:
-    now = dt_util.utcnow().timestamp()
-    mock_restore_cache_with_extra_data(
-        hass,
-        [
-            (
-                State(ENTITY_ID, "9.5"),
-                {
-                    "native_value": 9.5,
-                    "native_unit_of_measurement": UnitOfTemperature.CELSIUS,
-                    "device_class": "temperature",
-                    "pipeline": {
-                        "version": 1,
-                        "fingerprint": "x",
-                        "value": 9.5,
-                        "last_good": now - 3 * 3600,
-                        "stages": {},
-                    },
-                },
-            )
-        ],
-    )
+    _mock_restored(hass, 9.5, age_s=3 * 3600)
     hass.set_state(CoreState.not_running)
     await setup_entry(hass)
+    assert get_state(hass).state == STATE_UNAVAILABLE
+
+
+async def test_restored_value_expires_during_slow_startup(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    _mock_restored(hass, 9.5, age_s=25 * 60)
+    hass.set_state(CoreState.not_running)
+    await setup_entry(hass, hold_time=30.0)
+    assert get_state(hass).attributes["status"] == "restored"
+
+    # Home Assistant is still starting when the 30 minute hold time runs out.
+    await _tick(hass, freezer, 6)
     assert get_state(hass).state == STATE_UNAVAILABLE
 
 

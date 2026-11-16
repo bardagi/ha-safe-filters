@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Iterable
+from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass
-from homeassistant.components.sensor.const import UNIT_CONVERTERS
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.components.sensor.const import (
+    DEVICE_CLASS_STATE_CLASSES,
+    NON_NUMERIC_DEVICE_CLASSES,
+    UNIT_CONVERTERS,
+)
 from homeassistant.const import (
     ATTR_DEVICE_CLASS,
     ATTR_UNIT_OF_MEASUREMENT,
@@ -15,15 +21,35 @@ from homeassistant.const import (
 from homeassistant.core import State
 from homeassistant.util.unit_conversion import BaseUnitConverter
 
+# Converters whose result depends on *what* is measured (a specific gas, glucose, or
+# a dimensionless ratio): ppm → µg/m³ is only right for the gas it was made for, and
+# % ↔ ppm would happily turn 400 ppm CO₂ into 0.04 % humidity. They are only used
+# when the source's device class selects them, never as a guess.
+_QUANTITY_SPECIFIC_UNIT_CLASSES = frozenset(
+    {
+        "unitless",
+        "carbon_monoxide",
+        "nitrogen_dioxide",
+        "nitrogen_monoxide",
+        "ozone",
+        "sulphur_dioxide",
+        "blood_glucose_concentration",
+    }
+)
 
+
+@functools.cache
 def _find_converter(
     from_unit: str, to_unit: str, device_class: str | None
 ) -> type[BaseUnitConverter] | None:
-    candidates: list[type[BaseUnitConverter]] = []
     if device_class is not None and (preferred := UNIT_CONVERTERS.get(device_class)):
-        candidates.append(preferred)
-    candidates.extend(UNIT_CONVERTERS.values())
-    for converter in candidates:
+        # The device class says what is measured; no other converter applies.
+        if from_unit in preferred.VALID_UNITS and to_unit in preferred.VALID_UNITS:
+            return preferred
+        return None
+    for converter in UNIT_CONVERTERS.values():
+        if converter.UNIT_CLASS in _QUANTITY_SPECIFIC_UNIT_CLASSES:
+            continue
         if from_unit in converter.VALID_UNITS and to_unit in converter.VALID_UNITS:
             return converter
     return None
@@ -80,13 +106,36 @@ def pick_unit_and_device_class(
             unit = state_unit
         if (device_class := state.attributes.get(ATTR_DEVICE_CLASS)) is not None:
             device_classes.add(device_class)
-    return known, unit, _sensor_device_class(device_classes)
-
-
-def _sensor_device_class(device_classes: set[str]) -> SensorDeviceClass | None:
     if len(device_classes) != 1:
+        return known, unit, None
+    return known, unit, numeric_device_class(device_classes.pop())
+
+
+def numeric_device_class(value: Any) -> SensorDeviceClass | None:
+    """Return ``value`` as a numeric sensor device class, or None.
+
+    Unknown values and non-numeric classes (timestamp, date, enum) give None:
+    the output is always a number.
+    """
+    if value is None:
         return None
     try:
-        return SensorDeviceClass(next(iter(device_classes)))
+        device_class = SensorDeviceClass(value)
     except ValueError:
         return None
+    return None if device_class in NON_NUMERIC_DEVICE_CLASSES else device_class
+
+
+def state_class_for(device_class: SensorDeviceClass | None) -> SensorStateClass | None:
+    """The state class to use with ``device_class``.
+
+    ``measurement`` where Home Assistant allows it. Otherwise (energy, gas, water,
+    monetary, …) ``total``: not ``total_increasing``, because switching sources or
+    filtering can make the value go down, which would count as a meter reset.
+    """
+    allowed = None if device_class is None else DEVICE_CLASS_STATE_CLASSES.get(device_class)
+    if allowed is None or SensorStateClass.MEASUREMENT in allowed:
+        return SensorStateClass.MEASUREMENT
+    if SensorStateClass.TOTAL in allowed:
+        return SensorStateClass.TOTAL
+    return None

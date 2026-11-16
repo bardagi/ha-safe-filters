@@ -72,12 +72,45 @@ class TestRateLimit:
         stage.process(1000.0, 0, True)
         assert stage.process(0.0, 30, True) == pytest.approx(999.0)
 
+    def test_keeps_moving_after_clock_jumps_back(self) -> None:
+        stage = RateLimitStage(max_rate_per_min=1.0)
+        stage.process(0.0, 1000, True)
+        assert stage.process(10.0, 400, True) == 0.0  # clock went back: no step
+        assert stage.process(10.0, 460, False) == pytest.approx(1.0)
+
 
 class TestLowPass:
     def test_time_aware_step_response(self) -> None:
         stage = LowPassStage(time_constant_s=60)
         stage.process(0.0, 0, True)
-        assert stage.process(10.0, 60, True) == pytest.approx(10 * (1 - math.exp(-1)))
+        # The input was 0 until now: the step only starts to count from here.
+        assert stage.process(10.0, 60, True) == 0.0
+        assert stage.process(10.0, 120, False) == pytest.approx(10 * (1 - math.exp(-1)))
+
+    def test_new_sample_is_not_applied_retroactively(self) -> None:
+        """The response to a step does not depend on when the previous tick was."""
+        late = LowPassStage(time_constant_s=300)
+        early = LowPassStage(time_constant_s=300)
+        for stage in (late, early):
+            stage.process(0.0, 0, True)
+        late.process(0.0, 59, False)
+        assert late.process(10.0, 119, True) == 0.0
+        assert early.process(10.0, 119, True) == 0.0
+        assert late.process(10.0, 179, False) == pytest.approx(10 * (1 - math.exp(-60 / 300)))
+        assert early.process(10.0, 179, False) == pytest.approx(late.dump()["output"])
+
+    def test_keeps_moving_after_clock_jumps_back(self) -> None:
+        stage = LowPassStage(time_constant_s=60)
+        stage.process(0.0, 1000, True)
+        assert stage.process(10.0, 400, True) == 0.0
+        assert stage.process(10.0, 460, False) == pytest.approx(10 * (1 - math.exp(-1)))
+
+    def test_loads_state_without_input(self) -> None:
+        """State saved by 0.1.0 has no "input"; the output is assumed settled."""
+        stage = LowPassStage(time_constant_s=60)
+        stage.load({"output": 5.0, "time": 0.0})
+        assert stage.process(10.0, 60, True) == 5.0
+        assert stage.process(10.0, 120, False) == pytest.approx(10 - 5 * math.exp(-1))
 
     def test_independent_of_update_rate(self) -> None:
         """Two 30 s steps give the same result as one 60 s step (constant input)."""

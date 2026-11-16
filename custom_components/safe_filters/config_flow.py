@@ -248,6 +248,16 @@ async def _validate_quality(
     return user_input
 
 
+async def _validate_filters(
+    handler: SchemaCommonFlowHandler, user_input: dict[str, Any]
+) -> dict[str, Any]:
+    rate_limit = user_input.get(CONF_RATE_LIMIT) or {}
+    if rate_limit.get(CONF_ENABLED) and rate_limit.get(CONF_MAX_RATE, DEFAULT_MAX_RATE) <= 0:
+        # A limit of 0 would freeze the value forever.
+        raise SchemaFlowError("max_rate_not_positive")
+    return user_input
+
+
 async def _next_after_sources(options: dict[str, Any]) -> str:
     if options.get(CONF_METHOD) == CombineMethod.WEIGHTED_MEAN:
         return "weights"
@@ -263,7 +273,11 @@ QUALITY_STEP = SchemaFlowFormStep(
     next_step="filters",
     description_placeholders=_unit_placeholders,
 )
-FILTERS_STEP = SchemaFlowFormStep(_filters_schema, description_placeholders=_unit_placeholders)
+FILTERS_STEP = SchemaFlowFormStep(
+    _filters_schema,
+    validate_user_input=_validate_filters,
+    description_placeholders=_unit_placeholders,
+)
 
 CONFIG_FLOW = {
     "user": SchemaFlowFormStep(

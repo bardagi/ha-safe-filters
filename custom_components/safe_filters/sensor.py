@@ -51,7 +51,12 @@ from .engine import (
     SourceStatus,
     build_config,
 )
-from .units import convert_value, pick_unit_and_device_class
+from .units import (
+    convert_value,
+    numeric_device_class,
+    pick_unit_and_device_class,
+    state_class_for,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,6 +104,11 @@ class SafeFilterSensor(RestoreSensor):
         self._config = build_config(entry.options)
         self._pipeline = Pipeline(self._config)
         self._source_ids = list(self._config.sources)
+        self._no_stale_check = {
+            entity_id
+            for entity_id in self._source_ids
+            if split_entity_id(entity_id)[0] in _NO_STALE_CHECK_DOMAINS
+        }
         self._attr_name = entry.title
         self._attr_unique_id = entry.entry_id
         self._attr_suggested_display_precision = self._config.precision
@@ -107,7 +117,9 @@ class SafeFilterSensor(RestoreSensor):
         self._attr_extra_state_attributes = {}
         self._started = False
         self._can_write = False
-        self._last_written: tuple[Any, ...] | None = None
+        self._unit_pinned = False
+        self._last_primary: tuple[Any, ...] | None = None
+        self._last_attributes: dict[str, Any] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Restore state and start listening to the sources."""
@@ -147,18 +159,23 @@ class SafeFilterSensor(RestoreSensor):
         known, unit, device_class = pick_unit_and_device_class(self._source_states())
         if known:
             self._set_unit(unit, device_class)
+            self._unit_pinned = True
         else:
-            self._set_unit(restored_unit, _device_class_or_none(data.get(_RESTORE_DEVICE_CLASS)))
+            restored_device_class = numeric_device_class(data.get(_RESTORE_DEVICE_CLASS))
+            self._set_unit(restored_unit, restored_device_class)
+            # Without anything restored, pick the unit once the sources are known.
+            self._unit_pinned = restored_unit is not None or restored_device_class is not None
 
         if restored_unit != self._attr_native_unit_of_measurement:
             return
         now = dt_util.utcnow().timestamp()
         if self._pipeline.restore(data.get(_RESTORE_PIPELINE), now):
-            self._apply(self._pipeline.evaluate([], now, new_sample=False))
+            self._apply(self._pipeline.evaluate([], now, new_sample=False), flush_details=True)
 
     def _set_unit(self, unit: str | None, device_class: SensorDeviceClass | None) -> None:
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
+        self._attr_state_class = state_class_for(device_class)
 
     def _source_states(self) -> list[State | None]:
         return [self.hass.states.get(entity_id) for entity_id in self._source_ids]
@@ -166,7 +183,7 @@ class SafeFilterSensor(RestoreSensor):
     @callback
     def _async_on_started(self, _hass: HomeAssistant) -> None:
         self._started = True
-        self._async_evaluate(new_sample=True)
+        self._async_evaluate(new_sample=True, flush_details=True)
 
     @callback
     def _async_source_changed(self, event: Event[EventStateChangedData]) -> None:
@@ -181,18 +198,24 @@ class SafeFilterSensor(RestoreSensor):
     @callback
     def _async_tick(self, _now: datetime) -> None:
         if self._started:
-            self._async_evaluate(new_sample=False)
+            self._async_evaluate(new_sample=False, flush_details=True)
+            return
+        # Still starting up: don't read the sources yet, but let a restored value
+        # expire with the hold time.
+        now = dt_util.utcnow().timestamp()
+        self._apply(self._pipeline.evaluate([], now, new_sample=False), flush_details=True)
 
     @callback
-    def _async_evaluate(self, new_sample: bool) -> None:
-        if self._attr_native_unit_of_measurement is None and self._attr_device_class is None:
+    def _async_evaluate(self, new_sample: bool, flush_details: bool = False) -> None:
+        if not self._unit_pinned:
             # Nothing was known at startup; pin unit and device class now.
             known, unit, device_class = pick_unit_and_device_class(self._source_states())
             if known:
                 self._set_unit(unit, device_class)
+                self._unit_pinned = True
         now = dt_util.utcnow().timestamp()
         readings = [self._read_source(entity_id) for entity_id in self._source_ids]
-        self._apply(self._pipeline.evaluate(readings, now, new_sample))
+        self._apply(self._pipeline.evaluate(readings, now, new_sample), flush_details)
 
     def _read_source(self, entity_id: str) -> SourceReading:
         state = self.hass.states.get(entity_id)
@@ -215,14 +238,21 @@ class SafeFilterSensor(RestoreSensor):
             return SourceReading(entity_id, None, status=SourceStatus.UNIT_MISMATCH)
 
         last_reported = (
-            None
-            if split_entity_id(entity_id)[0] in _NO_STALE_CHECK_DOMAINS
-            else state.last_reported.timestamp()
+            None if entity_id in self._no_stale_check else state.last_reported.timestamp()
         )
         return SourceReading(entity_id, converted, last_reported)
 
     @callback
-    def _apply(self, result: PipelineResult) -> None:
+    def _apply(self, result: PipelineResult, flush_details: bool = False) -> None:
+        """Update the entity from ``result`` and write the state if needed.
+
+        Every write is a recorder row and a state_changed event (which also fires
+        automations on this entity), so a write happens right away only when
+        something that matters changed: the value, availability, unit, status, or
+        a source's status. Changes to the diagnostic values alone (``combined_value``
+        and per-source values) are written on the next ``flush_details`` call,
+        i.e. the periodic tick.
+        """
         self._attr_native_value = result.value
         self._attr_available = result.status is not PipelineStatus.NO_DATA
         self._attr_extra_state_attributes = {
@@ -237,28 +267,23 @@ class SafeFilterSensor(RestoreSensor):
                 for source in result.sources
             },
         }
-        snapshot = (
+        primary = (
             self._attr_available,
             self._attr_native_value,
             self._attr_native_unit_of_measurement,
             self._attr_device_class,
-            self._attr_extra_state_attributes,
+            result.status,
+            tuple(source.status for source in result.sources),
         )
-        if snapshot == self._last_written:
+        if primary == self._last_primary and (
+            not flush_details or self._attr_extra_state_attributes == self._last_attributes
+        ):
             return
-        self._last_written = snapshot
+        self._last_primary = primary
+        self._last_attributes = self._attr_extra_state_attributes
         if self._can_write:
             self.async_write_ha_state()
 
 
 def _rounded(value: float | None) -> float | None:
     return None if value is None else round(value, _ATTRIBUTE_DIGITS)
-
-
-def _device_class_or_none(value: Any) -> SensorDeviceClass | None:
-    if value is None:
-        return None
-    try:
-        return SensorDeviceClass(value)
-    except ValueError:
-        return None

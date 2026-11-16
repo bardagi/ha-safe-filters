@@ -75,6 +75,12 @@ def build_config(options: Mapping[str, Any]) -> PipelineConfig:
     lowpass_opts = _enabled_section(options, CONF_LOWPASS)
     ma_opts = _enabled_section(options, CONF_MOVING_AVERAGE)
 
+    max_rate = None if rate_opts is None else float(rate_opts.get(CONF_MAX_RATE, DEFAULT_MAX_RATE))
+    if max_rate is not None and max_rate <= 0:
+        # A limit of 0 would freeze the value forever; the config flow rejects it now,
+        # but older entries may still have it saved.
+        max_rate = None
+
     precision = options.get(CONF_PRECISION, DEFAULT_PRECISION)
 
     return PipelineConfig(
@@ -91,9 +97,7 @@ def build_config(options: Mapping[str, Any]) -> PipelineConfig:
             window_size=int(outlier_opts.get(CONF_WINDOW_SIZE, DEFAULT_OUTLIER_WINDOW)),
             radius=float(outlier_opts.get(CONF_RADIUS, DEFAULT_OUTLIER_RADIUS)),
         ),
-        max_rate_per_min=None
-        if rate_opts is None
-        else float(rate_opts.get(CONF_MAX_RATE, DEFAULT_MAX_RATE)),
+        max_rate_per_min=max_rate,
         lowpass_time_constant_s=None
         if lowpass_opts is None
         else float(lowpass_opts.get(CONF_TIME_CONSTANT, DEFAULT_TIME_CONSTANT))

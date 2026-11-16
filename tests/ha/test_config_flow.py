@@ -135,6 +135,19 @@ async def test_quality_errors(hass: HomeAssistant, quality: dict[str, Any], erro
     assert result["errors"] == {"base": error}
 
 
+async def test_zero_rate_limit_is_rejected(hass: HomeAssistant) -> None:
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Outdoor", "entity_ids": SOURCES, "method": "mean"}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], QUALITY_INPUT)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**FILTERS_INPUT, "rate_limit": {"enabled": True, "max_rate": 0.0}}
+    )
+    assert result["step_id"] == "filters"
+    assert result["errors"] == {"base": "max_rate_not_positive"}
+
+
 async def test_options_flow(hass: HomeAssistant) -> None:
     result = await _start(hass)
     result = await hass.config_entries.flow.async_configure(
