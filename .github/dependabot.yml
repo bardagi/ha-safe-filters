@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Keeps Home Assistant, its test harness, ruff, ty and prek current in uv.lock.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly

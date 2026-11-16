@@ -1,0 +1,55 @@
+[project]
+name = "ha-safe-filters"
+version = "0.1.0"
+description = "Home Assistant helper that safely combines and filters multiple sensors."
+readme = "README.md"
+license = "MIT"
+# Development environment only (current Home Assistant needs 3.14). The integration
+# itself must stay compatible with Python 3.13 for Home Assistant 2025.8+, see
+# ruff's and ty's target versions below.
+requires-python = ">=3.14.2"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "homeassistant",
+    "prek",
+    "pytest",
+    "pytest-asyncio",
+    # The Home Assistant test harness does not run on native Windows (needs fcntl);
+    # there, `pytest` runs only the engine tests.
+    "pytest-homeassistant-custom-component; sys_platform != 'win32'",
+    "resvg-py",
+    "ruff",
+    "ty",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components"]
+
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.src]
+include = ["custom_components", "scripts", "tests"]
+
+[tool.ty.analysis]
+# Only installed off Windows (see the dev group); resolved normally on Linux and in CI.
+allowed-unresolved-imports = ["pytest_homeassistant_custom_component.**", "freezegun.**"]

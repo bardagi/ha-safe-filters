@@ -1,0 +1,13 @@
+{
+  "domain": "safe_filters",
+  "name": "Safe Filters",
+  "codeowners": ["@bardagi"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/bardagi/ha-safe-filters",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/bardagi/ha-safe-filters/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

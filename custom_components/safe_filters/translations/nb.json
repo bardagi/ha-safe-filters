@@ -1,0 +1,227 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nytt sikkert filter",
+        "description": "Kombiner flere sensorer til én pålitelig verdi. Kilder som er utilgjengelige, har sluttet å rapportere, er utenfor gyldig område eller avviker fra de andre, utelates automatisk.",
+        "data": {
+          "name": "Navn",
+          "entity_ids": "Kildesensorer",
+          "method": "Kombineringsmetode"
+        },
+        "data_description": {
+          "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren.",
+          "method": "Hvordan de gyldige kildene kombineres til én verdi."
+        }
+      },
+      "weights": {
+        "title": "Vekting",
+        "description": "Gi hver kilde en relativ vekt. En kilde med vekt 2 teller dobbelt så mye som en med vekt 1. Vektene normaliseres over kildene som er gyldige til enhver tid.\n\n{sources}",
+        "sections": {
+          "weights": {
+            "name": "Vekt per kilde"
+          }
+        }
+      },
+      "quality": {
+        "title": "Datakvalitet",
+        "description": "Regler som avgjør om en kilde kan stoles på. Verdiene er i {unit}.",
+        "data": {
+          "min_value": "Laveste plausible verdi",
+          "max_value": "Høyeste plausible verdi",
+          "stale_after": "Utdatert etter",
+          "max_deviation": "Maks avvik fra de andre kildene",
+          "min_sources": "Minste antall gyldige kilder",
+          "hold_time": "Behold siste verdi i"
+        },
+        "data_description": {
+          "min_value": "Målinger under dette ignoreres. La stå tomt for ingen grense.",
+          "max_value": "Målinger over dette ignoreres. La stå tomt for ingen grense.",
+          "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Dette fanger døde enheter som beholder siste verdi. 0 slår av sjekken.",
+          "max_deviation": "Med 3 eller flere gyldige kilder ignoreres en kilde som ligger lenger unna medianen av alle enn dette. La stå tomt for å slå av.",
+          "min_sources": "Hvor mange kilder som må være gyldige for å beregne en ny verdi.",
+          "hold_time": "Når for få kilder er gyldige, vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."
+        }
+      },
+      "filters": {
+        "title": "Filtre",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på den kombinerte verdien. Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
+        "data": {
+          "precision": "Desimaler"
+        },
+        "data_description": {
+          "precision": "Avrunding brukes bare på den endelige verdien."
+        },
+        "sections": {
+          "outlier": {
+            "name": "1. Fjern spisser",
+            "data": {
+              "enabled": "Aktivert",
+              "window_size": "Vindu (målinger)",
+              "radius": "Maks avstand fra median"
+            },
+            "data_description": {
+              "window_size": "Antall nylige målinger det sammenlignes med.",
+              "radius": "En måling som ligger lenger unna medianen i vinduet enn dette, ignoreres. En reell, varig endring godtas etter omtrent et halvt vindu."
+            }
+          },
+          "rate_limit": {
+            "name": "2. Endringsgrense",
+            "data": {
+              "enabled": "Aktivert",
+              "max_rate": "Maks endring per minutt"
+            },
+            "data_description": {
+              "max_rate": "Verdien kan ikke endre seg raskere enn dette, i sensorens enhet per minutt."
+            }
+          },
+          "lowpass": {
+            "name": "3. Lavpass",
+            "data": {
+              "enabled": "Aktivert",
+              "time_constant": "Tidskonstant"
+            },
+            "data_description": {
+              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer."
+            }
+          },
+          "moving_average": {
+            "name": "4. Glidende gjennomsnitt",
+            "data": {
+              "enabled": "Aktivert",
+              "window": "Vindu"
+            },
+            "data_description": {
+              "window": "Tidsvektet gjennomsnitt over denne perioden."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "no_sources": "Velg minst én kildesensor.",
+      "duplicate_sources": "Samme sensor er valgt mer enn én gang.",
+      "incompatible_units": "De valgte sensorene har enheter som ikke kan konverteres til hverandre.",
+      "min_not_below_max": "Laveste plausible verdi må være lavere enn høyeste.",
+      "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Kilder",
+        "description": "Endre sensorene og hvordan de kombineres.",
+        "data": {
+          "entity_ids": "Kildesensorer",
+          "method": "Kombineringsmetode"
+        },
+        "data_description": {
+          "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren.",
+          "method": "Hvordan de gyldige kildene kombineres til én verdi."
+        }
+      },
+      "weights": {
+        "title": "Vekting",
+        "description": "Gi hver kilde en relativ vekt. En kilde med vekt 2 teller dobbelt så mye som en med vekt 1. Vektene normaliseres over kildene som er gyldige til enhver tid.\n\n{sources}",
+        "sections": {
+          "weights": {
+            "name": "Vekt per kilde"
+          }
+        }
+      },
+      "quality": {
+        "title": "Datakvalitet",
+        "description": "Regler som avgjør om en kilde kan stoles på. Verdiene er i {unit}.",
+        "data": {
+          "min_value": "Laveste plausible verdi",
+          "max_value": "Høyeste plausible verdi",
+          "stale_after": "Utdatert etter",
+          "max_deviation": "Maks avvik fra de andre kildene",
+          "min_sources": "Minste antall gyldige kilder",
+          "hold_time": "Behold siste verdi i"
+        },
+        "data_description": {
+          "min_value": "Målinger under dette ignoreres. La stå tomt for ingen grense.",
+          "max_value": "Målinger over dette ignoreres. La stå tomt for ingen grense.",
+          "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Dette fanger døde enheter som beholder siste verdi. 0 slår av sjekken.",
+          "max_deviation": "Med 3 eller flere gyldige kilder ignoreres en kilde som ligger lenger unna medianen av alle enn dette. La stå tomt for å slå av.",
+          "min_sources": "Hvor mange kilder som må være gyldige for å beregne en ny verdi.",
+          "hold_time": "Når for få kilder er gyldige, vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."
+        }
+      },
+      "filters": {
+        "title": "Filtre",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på den kombinerte verdien. Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
+        "data": {
+          "precision": "Desimaler"
+        },
+        "data_description": {
+          "precision": "Avrunding brukes bare på den endelige verdien."
+        },
+        "sections": {
+          "outlier": {
+            "name": "1. Fjern spisser",
+            "data": {
+              "enabled": "Aktivert",
+              "window_size": "Vindu (målinger)",
+              "radius": "Maks avstand fra median"
+            },
+            "data_description": {
+              "window_size": "Antall nylige målinger det sammenlignes med.",
+              "radius": "En måling som ligger lenger unna medianen i vinduet enn dette, ignoreres. En reell, varig endring godtas etter omtrent et halvt vindu."
+            }
+          },
+          "rate_limit": {
+            "name": "2. Endringsgrense",
+            "data": {
+              "enabled": "Aktivert",
+              "max_rate": "Maks endring per minutt"
+            },
+            "data_description": {
+              "max_rate": "Verdien kan ikke endre seg raskere enn dette, i sensorens enhet per minutt."
+            }
+          },
+          "lowpass": {
+            "name": "3. Lavpass",
+            "data": {
+              "enabled": "Aktivert",
+              "time_constant": "Tidskonstant"
+            },
+            "data_description": {
+              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer."
+            }
+          },
+          "moving_average": {
+            "name": "4. Glidende gjennomsnitt",
+            "data": {
+              "enabled": "Aktivert",
+              "window": "Vindu"
+            },
+            "data_description": {
+              "window": "Tidsvektet gjennomsnitt over denne perioden."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "no_sources": "Velg minst én kildesensor.",
+      "duplicate_sources": "Samme sensor er valgt mer enn én gang.",
+      "incompatible_units": "De valgte sensorene har enheter som ikke kan konverteres til hverandre.",
+      "min_not_below_max": "Laveste plausible verdi må være lavere enn høyeste.",
+      "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer."
+    }
+  },
+  "selector": {
+    "method": {
+      "options": {
+        "min": "Minimum",
+        "max": "Maksimum",
+        "mean": "Gjennomsnitt",
+        "median": "Median",
+        "weighted_mean": "Vektet gjennomsnitt",
+        "priority": "Prioritet (første gyldige kilde)"
+      }
+    }
+  }
+}

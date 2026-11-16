@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Safe Filters</title>
+  <!-- Source of truth for the brand PNGs: run scripts/render_brand.py after editing. -->
+  <defs>
+    <linearGradient id="funnel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E88E5"/>
+      <stop offset="1" stop-color="#00ACC1"/>
+    </linearGradient>
+  </defs>
+  <!-- Noisy source signals -->
+  <g fill="none" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <polyline stroke="#EF5350" points="44,12 59,24 45,36 70,49 55,61 81,73 78,98"/>
+    <polyline stroke="#FFA726" points="128,12 138,24 118,36 138,49 118,61 138,73 128,98"/>
+    <polyline stroke="#AB47BC" points="212,12 197,24 211,36 186,49 201,61 175,73 178,98"/>
+  </g>
+  <!-- Clean output -->
+  <path d="M128 213 C 137 225 145 232 145 239 A17 17 0 0 1 111 239 C 111 232 119 225 128 213 Z" fill="#43A047"/>
+  <!-- Filter funnel with a "safe" check mark -->
+  <path d="M28 92 L228 92 L148 170 L148 204 L108 204 L108 170 Z" fill="url(#funnel)" stroke="url(#funnel)" stroke-width="12" stroke-linejoin="round"/>
+  <polyline points="96,124 120,148 162,108" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

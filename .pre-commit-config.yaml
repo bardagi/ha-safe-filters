@@ -1,0 +1,65 @@
+# Git hooks, run with prek (https://prek.j178.dev); also compatible with pre-commit.
+#   uv sync && uv run prek install      # enable on every commit
+#   uv run prek run --all-files         # run everything now
+# Tool versions for ruff and ty come from uv.lock (local hooks below).
+default_install_hook_types: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        exclude: ^uv\.lock$ # large because it locks Home Assistant itself
+      - id: check-case-conflict
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: uv-lock
+        name: uv lock is up to date
+        entry: uv lock --check
+        language: system
+        files: ^(pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --frozen ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --frozen ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: ty
+        name: ty check
+        entry: uv run --frozen ty check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+
+      - id: check-integration
+        name: translations, versions and brand icon
+        entry: uv run --frozen python scripts/check_integration.py
+        language: system
+        files: ^(custom_components/safe_filters/.*\.(json|png)|hacs\.json|pyproject\.toml|scripts/check_integration\.py)$
+        pass_filenames: false
+
+      - id: render-brand
+        name: brand PNGs match assets/icon.svg
+        entry: uv run --frozen python scripts/render_brand.py
+        language: system
+        files: ^(assets/icon\.svg|scripts/render_brand\.py)$
+        pass_filenames: false

@@ -1,0 +1,91 @@
+"""Constants for Safe Filters."""
+
+from datetime import timedelta
+from typing import Final
+
+from .engine.options import (
+    CONF_ENABLED,
+    CONF_ENTITY_IDS,
+    CONF_HOLD_TIME,
+    CONF_LOWPASS,
+    CONF_MAX_DEVIATION,
+    CONF_MAX_RATE,
+    CONF_MAX_VALUE,
+    CONF_METHOD,
+    CONF_MIN_SOURCES,
+    CONF_MIN_VALUE,
+    CONF_MOVING_AVERAGE,
+    CONF_NAME,
+    CONF_OUTLIER,
+    CONF_PRECISION,
+    CONF_RADIUS,
+    CONF_RATE_LIMIT,
+    CONF_STALE_AFTER,
+    CONF_TIME_CONSTANT,
+    CONF_WEIGHTS,
+    CONF_WINDOW,
+    CONF_WINDOW_SIZE,
+    DEFAULT_HOLD_TIME,
+    DEFAULT_MA_WINDOW,
+    DEFAULT_MAX_RATE,
+    DEFAULT_METHOD,
+    DEFAULT_MIN_SOURCES,
+    DEFAULT_OUTLIER_RADIUS,
+    DEFAULT_OUTLIER_WINDOW,
+    DEFAULT_PRECISION,
+    DEFAULT_STALE_AFTER,
+    DEFAULT_TIME_CONSTANT,
+    DEFAULT_WEIGHT,
+)
+
+DOMAIN: Final = "safe_filters"
+
+# How often staleness, hold time and time-based filters are re-evaluated when no
+# source reports.
+TICK_INTERVAL: Final = timedelta(seconds=60)
+
+ATTR_STATUS: Final = "status"
+ATTR_VALID_SOURCES: Final = "valid_sources"
+ATTR_COMBINED_VALUE: Final = "combined_value"
+ATTR_SOURCES: Final = "sources"
+
+__all__ = [
+    "ATTR_COMBINED_VALUE",
+    "ATTR_SOURCES",
+    "ATTR_STATUS",
+    "ATTR_VALID_SOURCES",
+    "CONF_ENABLED",
+    "CONF_ENTITY_IDS",
+    "CONF_HOLD_TIME",
+    "CONF_LOWPASS",
+    "CONF_MAX_DEVIATION",
+    "CONF_MAX_RATE",
+    "CONF_MAX_VALUE",
+    "CONF_METHOD",
+    "CONF_MIN_SOURCES",
+    "CONF_MIN_VALUE",
+    "CONF_MOVING_AVERAGE",
+    "CONF_NAME",
+    "CONF_OUTLIER",
+    "CONF_PRECISION",
+    "CONF_RADIUS",
+    "CONF_RATE_LIMIT",
+    "CONF_STALE_AFTER",
+    "CONF_TIME_CONSTANT",
+    "CONF_WEIGHTS",
+    "CONF_WINDOW",
+    "CONF_WINDOW_SIZE",
+    "DEFAULT_HOLD_TIME",
+    "DEFAULT_MAX_RATE",
+    "DEFAULT_MA_WINDOW",
+    "DEFAULT_METHOD",
+    "DEFAULT_MIN_SOURCES",
+    "DEFAULT_OUTLIER_RADIUS",
+    "DEFAULT_OUTLIER_WINDOW",
+    "DEFAULT_PRECISION",
+    "DEFAULT_STALE_AFTER",
+    "DEFAULT_TIME_CONSTANT",
+    "DEFAULT_WEIGHT",
+    "DOMAIN",
+    "TICK_INTERVAL",
+]
