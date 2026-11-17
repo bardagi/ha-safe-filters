@@ -26,13 +26,18 @@ from homeassistant.const import (
 from homeassistant.core import (
     Event,
     EventStateChangedData,
+    EventStateReportedData,
     HomeAssistant,
     State,
     callback,
     split_entity_id,
 )
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_state_report_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
@@ -135,6 +140,9 @@ class SafeFilterSensor(RestoreSensor):
         self.async_on_remove(
             async_track_state_change_event(self.hass, self._source_ids, self._async_source_changed)
         )
+        self.async_on_remove(
+            async_track_state_report_event(self.hass, self._source_ids, self._async_source_reported)
+        )
         self.async_on_remove(async_track_time_interval(self.hass, self._async_tick, TICK_INTERVAL))
         # Sources load in arbitrary order during startup. Until Home Assistant has
         # started, keep showing the restored value instead of computing from a
@@ -192,9 +200,22 @@ class SafeFilterSensor(RestoreSensor):
             return
         old_state = event.data["old_state"]
         new_state = event.data["new_state"]
-        # Attribute-only changes are not new measurements.
-        new_sample = new_state is None or old_state is None or old_state.state != new_state.state
-        self._async_evaluate(new_sample=new_sample)
+        # Attribute-only changes are not new measurements. The same state with the
+        # same attributes is a forced update: the source measured the same value again.
+        new_sample = (
+            new_state is None
+            or old_state is None
+            or old_state.state != new_state.state
+            or old_state.attributes == new_state.attributes
+        )
+        self._async_evaluate(new_sample=new_sample, reported_by=event.data["entity_id"])
+
+    @callback
+    def _async_source_reported(self, event: Event[EventStateReportedData]) -> None:
+        """A source reported its unchanged value again: that is a new measurement too."""
+        if not self._started:
+            return
+        self._async_evaluate(new_sample=True, reported_by=event.data["entity_id"])
 
     @callback
     def _async_tick(self, _now: datetime) -> None:
@@ -207,7 +228,9 @@ class SafeFilterSensor(RestoreSensor):
         self._apply(self._pipeline.evaluate([], now, new_sample=False), flush_details=True)
 
     @callback
-    def _async_evaluate(self, new_sample: bool, flush_details: bool = False) -> None:
+    def _async_evaluate(
+        self, new_sample: bool, flush_details: bool = False, reported_by: str | None = None
+    ) -> None:
         if not self._unit_pinned:
             # Nothing was known at startup; pin unit and device class now.
             known, unit, device_class = pick_unit_and_device_class(self._source_states())
@@ -216,7 +239,7 @@ class SafeFilterSensor(RestoreSensor):
                 self._unit_pinned = True
         now = dt_util.utcnow().timestamp()
         readings = [self._read_source(entity_id) for entity_id in self._source_ids]
-        self._apply(self._pipeline.evaluate(readings, now, new_sample), flush_details)
+        self._apply(self._pipeline.evaluate(readings, now, new_sample, reported_by), flush_details)
 
     def _read_source(self, entity_id: str) -> SourceReading:
         state = self.hass.states.get(entity_id)

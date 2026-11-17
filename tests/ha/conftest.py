@@ -36,6 +36,7 @@ def base_options(**overrides: Any) -> dict[str, Any]:
         "outlier": {"enabled": False, "window_size": 5.0, "radius": 2.0},
         "rate_limit": {"enabled": False, "max_rate": 1.0},
         "lowpass": {"enabled": False, "time_constant": 5.0},
+        "ema": {"enabled": False, "readings": 5.0},
         "moving_average": {"enabled": False, "window": 10.0},
         "precision": 1.0,
     }

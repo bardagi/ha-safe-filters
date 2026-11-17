@@ -13,7 +13,14 @@ from typing import Any
 
 from .combine import CombineMethod, combine, effective_weights, weight_of
 from .compensation import OffsetLearner
-from .stages import LowPassStage, MovingAverageStage, OutlierStage, RateLimitStage, Stage
+from .stages import (
+    EmaStage,
+    LowPassStage,
+    MovingAverageStage,
+    OutlierStage,
+    RateLimitStage,
+    Stage,
+)
 from .validation import SourceReading, SourceStatus, ValidationConfig, validate
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,6 +69,7 @@ class PipelineConfig:
     outlier: OutlierConfig | None = None
     max_rate_per_min: float | None = None
     lowpass_time_constant_s: float | None = None
+    ema_readings: int | None = None
     moving_average_window_s: float | None = None
     precision: int | None = None
 
@@ -72,7 +80,7 @@ class PipelineConfig:
         sources or the low-pass time constant starts the filters fresh, while
         changing a range limit or the hold time keeps them.
         """
-        relevant = {
+        relevant: dict[str, Any] = {
             "sources": list(self.sources),
             "method": str(self.method),
             "weights": {key: float(value) for key, value in sorted(self.weights.items())},
@@ -83,6 +91,9 @@ class PipelineConfig:
             "lowpass_time_constant_s": self.lowpass_time_constant_s,
             "moving_average_window_s": self.moving_average_window_s,
         }
+        if self.ema_readings is not None:
+            # Only when set, so entries without it keep their saved filter state.
+            relevant["ema_readings"] = self.ema_readings
         encoded = json.dumps(relevant, sort_keys=True).encode()
         return hashlib.sha256(encoded).hexdigest()[:16]
 
@@ -117,6 +128,8 @@ def build_stages(config: PipelineConfig) -> list[Stage]:
         stages.append(RateLimitStage(config.max_rate_per_min))
     if config.lowpass_time_constant_s is not None:
         stages.append(LowPassStage(config.lowpass_time_constant_s))
+    if config.ema_readings is not None:
+        stages.append(EmaStage(config.ema_readings))
     if config.moving_average_window_s is not None:
         stages.append(MovingAverageStage(config.moving_average_window_s))
     return stages
@@ -137,16 +150,25 @@ class Pipeline:
         )
         self._value: float | None = None
         """Unrounded filter output (also what is held during a dropout)."""
+        self._input: float | None = None
+        """The last combined value fed to the filters, which keep settling toward it
+        while it is held."""
         self._last_good: float | None = None
         """When quorum was last met."""
         self._restored = False
 
     def evaluate(
-        self, readings: Sequence[SourceReading], now: float, new_sample: bool
+        self,
+        readings: Sequence[SourceReading],
+        now: float,
+        new_sample: bool,
+        reported_by: str | None = None,
     ) -> PipelineResult:
         """Run the pipeline for the current source readings.
 
         ``new_sample`` is True when a source reported, False for periodic ticks.
+        ``reported_by`` is the source that reported, if known: a report only counts
+        as a new sample if that source is valid.
         """
         config = self.config
         checked = tuple(validate(readings, config.validation, now))
@@ -155,6 +177,8 @@ class Pipeline:
             for r in checked
             if r.status is SourceStatus.OK and r.value is not None
         ]
+        if new_sample and reported_by is not None:
+            new_sample = any(entity_id == reported_by for entity_id, _ in valid)
 
         if valid and len(valid) >= config.min_sources and self._enough_weight(valid):
             if self._learner is not None:
@@ -164,13 +188,13 @@ class Pipeline:
             if self._value is None:
                 # Starting up or recovering from "no data": old history is irrelevant.
                 self._reset_stages()
-            value = combined
-            for stage in self.stages:
-                value = stage.process(value, now, new_sample)
-            self._value = value
+            self._value = self._filter(combined, now, new_sample)
+            self._input = combined
             self._last_good = now
             self._restored = False
-            return self._result(self._round(value), PipelineStatus.OK, combined, checked, valid)
+            return self._result(
+                self._round(self._value), PipelineStatus.OK, combined, checked, valid
+            )
 
         if self._learner is not None:
             self._learner.advance(now)
@@ -180,12 +204,22 @@ class Pipeline:
             and self._last_good is not None
             and now - self._last_good <= config.hold_time_s
         ):
+            if self._input is not None:
+                # No new value, but the time-based filters keep settling toward
+                # the last one, however old it is.
+                self._value = self._filter(self._input, now, new_sample=False)
             status = PipelineStatus.RESTORED if self._restored else PipelineStatus.HOLDING
             return self._result(self._round(self._value), status, None, checked, [])
 
         self._value = None
+        self._input = None
         self._restored = False
         return self._result(None, PipelineStatus.NO_DATA, None, checked, [])
+
+    def _filter(self, value: float, now: float, new_sample: bool) -> float:
+        for stage in self.stages:
+            value = stage.process(value, now, new_sample)
+        return value
 
     def _enough_weight(self, valid: Sequence[tuple[str, float]]) -> bool:
         """Whether the valid sources carry the required share of the total weight."""
@@ -220,6 +254,7 @@ class Pipeline:
             "version": STATE_VERSION,
             "fingerprint": self.fingerprint,
             "value": self._value,
+            "input": self._input,
             "last_good": self._last_good,
             "stages": {stage.kind: stage.dump() for stage in self.stages},
             "offsets": None if self._learner is None else self._learner.dump(),
@@ -233,6 +268,8 @@ class Pipeline:
         counted from when the value was last good, runs out. Filter state and
         learned source offsets are only reused when the settings they depend on are
         unchanged. The offsets are kept even when the value is too old to restore.
+        With the filter state, the filters keep settling toward the last input while
+        the restored value is shown; without it, the value is shown as is.
         """
         if not data or data.get("version") != STATE_VERSION:
             return False
@@ -263,6 +300,9 @@ class Pipeline:
                 saved = data["stages"]
                 for stage in self.stages:
                     stage.load(saved[stage.kind])
+                # Saved before "input" existed: just show the value.
+                saved_input = data.get("input")
+                self._input = None if saved_input is None else float(saved_input)
             except (KeyError, TypeError, ValueError) as err:
                 _LOGGER.debug("Discarding saved filter state: %s", err)
                 self._reset_stages()
@@ -271,6 +311,7 @@ class Pipeline:
     def _reset_stages(self) -> None:
         for stage in self.stages:
             stage.reset()
+        self._input = None
 
     def _round(self, value: float) -> float:
         if self.config.precision is None:

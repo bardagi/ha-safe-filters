@@ -24,6 +24,7 @@ def test_full_options() -> None:
             "outlier": {"enabled": True, "window_size": 7.0, "radius": 2.5},
             "rate_limit": {"enabled": False, "max_rate": 1.0},
             "lowpass": {"enabled": True, "time_constant": 5.0},
+            "ema": {"enabled": True, "readings": 8.0},
             "moving_average": {"enabled": True, "window": 10.0},
             "precision": 1.0,
         }
@@ -40,8 +41,18 @@ def test_full_options() -> None:
     assert config.outlier.window_size == 7
     assert config.max_rate_per_min is None
     assert config.lowpass_time_constant_s == 300.0
+    assert config.ema_readings == 8
     assert config.moving_average_window_s == 600.0
     assert config.precision == 1
+
+
+def test_ema_disabled_or_missing() -> None:
+    """Entries saved before the EMA over readings existed have no "ema" section."""
+    base = {"entity_ids": ["sensor.a"], "method": "min"}
+    assert build_config(base).ema_readings is None
+    disabled = build_config({**base, "ema": {"enabled": False, "readings": 5.0}})
+    assert disabled.ema_readings is None
+    assert build_config({**base, "ema": {"enabled": True}}).ema_readings == 5
 
 
 def test_minimal_options_use_defaults() -> None:

@@ -1,5 +1,7 @@
 """Tests for the full pipeline: quorum, hold, filters, persistence."""
 
+import math
+
 import pytest
 
 from custom_components.safe_filters.engine import (
@@ -102,6 +104,67 @@ def test_short_dropout_keeps_filter_state() -> None:
     assert pipeline.evaluate(readings(20.0, 20.0, 20.0), 120, True).value == 10.0
     result = pipeline.evaluate(readings(20.0, 20.0, 20.0), 180, False)
     assert 10.0 < value_of(result) < 20.0  # smoothed, not reset
+
+
+def test_hold_keeps_smoothing_toward_the_last_value() -> None:
+    """A source going stale mid-step doesn't freeze the low-pass halfway."""
+    pipeline = make(
+        hold_time_s=1800,
+        lowpass_time_constant_s=300,
+        validation=ValidationConfig(stale_after_s=120),
+    )
+    pipeline.evaluate(readings(10.0, 10.0, 10.0, reported=0), 0, True)
+    assert pipeline.evaluate(readings(20.0, 20.0, 20.0, reported=60), 60, True).value == 10.0
+
+    held = [
+        pipeline.evaluate(readings(20.0, 20.0, 20.0, reported=60), t, False)
+        for t in (300, 600, 1800)
+    ]
+    assert [r.status for r in held] == [PipelineStatus.HOLDING] * 3
+    assert [r.combined for r in held] == [None] * 3
+    assert value_of(held[0]) == pytest.approx(20 - 10 * math.exp(-240 / 300))
+    assert value_of(held[1]) > value_of(held[0])
+    assert value_of(held[2]) == pytest.approx(20.0, abs=0.05)
+    # The hold time still counts from the last good value.
+    gone = pipeline.evaluate(readings(20.0, 20.0, 20.0, reported=60), 1861, False)
+    assert gone.status is PipelineStatus.NO_DATA
+
+
+def test_only_reports_from_valid_sources_are_new_samples() -> None:
+    pipeline = make(
+        method=CombineMethod.MEAN,
+        outlier=OutlierConfig(window_size=5, radius=100),
+        ema_readings=3,  # alpha = 0.5
+    )
+    assert pipeline.evaluate(readings(10.0, 10.0, 40.0), 0, True).value == 20.0
+
+    # sensor.c dropping out changes the combined value, but is not a reading.
+    dropout = pipeline.evaluate(readings(10.0, 10.0, None), 60, True, reported_by="sensor.c")
+    assert dropout.combined == 10.0
+    assert dropout.value == 20.0
+    assert pipeline.dump()["stages"]["outlier"]["window"] == [20.0]
+
+    reading = pipeline.evaluate(readings(10.0, 10.0, None), 120, True, reported_by="sensor.a")
+    assert reading.value == pytest.approx(15.0)
+    assert pipeline.dump()["stages"]["outlier"]["window"] == [20.0, 10.0]
+
+
+def test_fingerprint_unchanged_without_ema() -> None:
+    """Filter state saved before the EMA over readings existed is still reused."""
+    config = PipelineConfig(
+        sources=SOURCES,
+        outlier=OutlierConfig(window_size=5, radius=2.0),
+        lowpass_time_constant_s=300.0,
+    )
+    # As computed before the EMA over readings was added.
+    assert config.state_fingerprint() == "a36b9776cbab8784"
+    with_ema = PipelineConfig(
+        sources=SOURCES,
+        outlier=OutlierConfig(window_size=5, radius=2.0),
+        lowpass_time_constant_s=300.0,
+        ema_readings=5,
+    )
+    assert with_ema.state_fingerprint() != config.state_fingerprint()
 
 
 def test_spike_never_reaches_the_smoother() -> None:
@@ -247,7 +310,9 @@ class TestRestore:
         assert restored.restore(state, now=420)
         snapshot = restored.evaluate([], 420, False)
         assert snapshot.status is PipelineStatus.RESTORED
-        assert snapshot.value == round(state["value"], 2)
+        # Keeps settling toward the last input (12.0), as the original would have.
+        assert snapshot.value == saved.evaluate([], 420, False).value
+        assert state["value"] < value_of(snapshot) < 12.0
 
         # Continues smoothing from the restored state instead of jumping to 12.0.
         expected = value_of(saved.evaluate(readings(12.0, 12.0, 12.0), 480, True))
@@ -266,12 +331,22 @@ class TestRestore:
         assert not restored.restore(state, now=300 + 1801)
         assert restored.evaluate([], 2200, False).status is PipelineStatus.NO_DATA
 
+    def test_state_without_input_is_shown_as_is(self) -> None:
+        """State saved before "input" existed: the value is held, not smoothed further."""
+        state = self._warm().dump()
+        del state["input"]
+        restored = make(hold_time_s=1800, lowpass_time_constant_s=600)
+        assert restored.restore(state, now=420)
+        assert restored.evaluate([], 900, False).value == state["value"]
+
     def test_changed_filter_settings_start_fresh(self) -> None:
         state = self._warm().dump()
         restored = make(hold_time_s=1800, lowpass_time_constant_s=60)
         assert restored.restore(state, now=420)
-        # Value is shown, but the new low-pass has no history: first sample passes through.
-        assert restored.evaluate(readings(15.0, 15.0, 15.0), 480, True).value == 15.0
+        # The value is shown as is: the new low-pass has no history to settle.
+        assert restored.evaluate([], 900, False).value == state["value"]
+        # ... and its first sample passes through.
+        assert restored.evaluate(readings(15.0, 15.0, 15.0), 960, True).value == 15.0
 
     def test_changed_hold_time_keeps_filter_state(self) -> None:
         saved = self._warm()

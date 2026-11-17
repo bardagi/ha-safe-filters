@@ -72,7 +72,7 @@
       },
       "filters": {
         "title": "Filtre",
-        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt. Hver graf viser ett filter alene, brukt på det samme støyete eksempelet: grått er inndata, blått er utdata.",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning (3 til 5) gir forsinkelse, så vanligvis holder det med én av dem. Hver graf viser ett filter alene, brukt på det samme støyete eksempelet: grått er inndata, blått er utdata.",
         "data": {
           "precision": "Desimaler"
         },
@@ -103,17 +103,27 @@
             }
           },
           "lowpass": {
-            "name": "3. Lavpass",
+            "name": "3. Eksponentielt glidende gjennomsnitt over tid (lavpass)",
             "data": {
               "enabled": "Aktivert",
               "time_constant": "Tidskonstant"
             },
             "data_description": {
-              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer.\n\n![Lavpass på et støyete eksempel]({lowpass_chart})"
+              "time_constant": "Eksponentiell utjevning på reell tid, også kjent som lavpassfilter. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer. Mellom rapportene, og mens den siste verdien holdes, fortsetter den mot den siste gyldige målingen.\n\n![Lavpass på et støyete eksempel]({lowpass_chart})"
+            }
+          },
+          "ema": {
+            "name": "4. Eksponentielt glidende gjennomsnitt over målinger",
+            "data": {
+              "enabled": "Aktivert",
+              "readings": "Målinger"
+            },
+            "data_description": {
+              "readings": "Hver nye gyldige måling flytter verdien 2/(N+1) av veien mot seg: med 5 målinger en tredjedel. En kilde som sender samme verdi på nytt, teller hver gang. Tiden spiller ingen rolle: slutter kilden å rapportere, blir verdien stående, så for kilder som bare sender endringer er gjennomsnittet over tid vanligvis bedre.\n\n![Eksponentielt glidende gjennomsnitt over målinger på et støyete eksempel]({ema_chart})"
             }
           },
           "moving_average": {
-            "name": "4. Glidende gjennomsnitt",
+            "name": "5. Glidende gjennomsnitt",
             "data": {
               "enabled": "Aktivert",
               "window": "Vindu"
@@ -197,7 +207,7 @@
       },
       "filters": {
         "title": "Filtre",
-        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt. Hver graf viser ett filter alene, brukt på det samme støyete eksempelet: grått er inndata, blått er utdata.",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning (3 til 5) gir forsinkelse, så vanligvis holder det med én av dem. Hver graf viser ett filter alene, brukt på det samme støyete eksempelet: grått er inndata, blått er utdata.",
         "data": {
           "precision": "Desimaler"
         },
@@ -228,17 +238,27 @@
             }
           },
           "lowpass": {
-            "name": "3. Lavpass",
+            "name": "3. Eksponentielt glidende gjennomsnitt over tid (lavpass)",
             "data": {
               "enabled": "Aktivert",
               "time_constant": "Tidskonstant"
             },
             "data_description": {
-              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer.\n\n![Lavpass på et støyete eksempel]({lowpass_chart})"
+              "time_constant": "Eksponentiell utjevning på reell tid, også kjent som lavpassfilter. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer. Mellom rapportene, og mens den siste verdien holdes, fortsetter den mot den siste gyldige målingen.\n\n![Lavpass på et støyete eksempel]({lowpass_chart})"
+            }
+          },
+          "ema": {
+            "name": "4. Eksponentielt glidende gjennomsnitt over målinger",
+            "data": {
+              "enabled": "Aktivert",
+              "readings": "Målinger"
+            },
+            "data_description": {
+              "readings": "Hver nye gyldige måling flytter verdien 2/(N+1) av veien mot seg: med 5 målinger en tredjedel. En kilde som sender samme verdi på nytt, teller hver gang. Tiden spiller ingen rolle: slutter kilden å rapportere, blir verdien stående, så for kilder som bare sender endringer er gjennomsnittet over tid vanligvis bedre.\n\n![Eksponentielt glidende gjennomsnitt over målinger på et støyete eksempel]({ema_chart})"
             }
           },
           "moving_average": {
-            "name": "4. Glidende gjennomsnitt",
+            "name": "5. Glidende gjennomsnitt",
             "data": {
               "enabled": "Aktivert",
               "window": "Vindu"

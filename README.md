@@ -11,9 +11,9 @@ A helper that turns **one sensor, or several combined**, into **one trustworthy 
 It replaces a YAML `filter` sensor for a single noisy sensor, and chains like `min_max` → `filter` → `statistics` for several, with one helper you set up in the UI.
 
 ```
-sources ──► validate each ──► enough valid? ──► combine ──► spike     ──► rate  ──► low-pass ──► moving  ──► round
-            (unavailable,     (else hold last   (min/max/    rejection     limit                 average
-             range, stale,     value, then       mean/median/
+sources ──► validate each ──► enough valid? ──► combine ──► spike     ──► rate  ──► EMA over  ──► EMA over  ──► moving  ──► round
+            (unavailable,     (else hold last   (min/max/    rejection     limit    time          readings      average
+             range, stale,     value, then       mean/median/                       (low-pass)
              deviation, unit)  unavailable)      weighted/priority)
 ```
 
@@ -24,7 +24,7 @@ sources ──► validate each ──► enough valid? ──► combine ──
 | `min_max` keeps using a dead sensor's last value forever. | Sources that are `unavailable` are always ignored. Optionally, *Stale after* also ignores a source that has stopped reporting but kept its last value. |
 | One glitching sensor (e.g. -40 °C on a low battery) wins `min`. | Range limits, plus *max deviation* from the median of the other sources. |
 | `median` of two sensors is just the average, so it rejects nothing. | Validation works per source, whatever the combine method. |
-| The `lowpass` filter's time constant counts *samples*, not minutes. | Low-pass and moving average use real elapsed time. |
+| The `lowpass` filter's time constant counts *samples*, not minutes. | The low-pass (an exponential moving average over time) and the moving average use real elapsed time. If you do want to count readings, the EMA over readings counts only valid ones. |
 | `precision` on every filter step rounds intermediate values (stair-steps). | Rounding happens only on the final value. |
 | The order of chained filters is easy to get wrong. | Fixed, safe order; every stage is optional. |
 | After a restart the chain starts empty and shows wrong values. | The value **and the filter state** are restored. During startup the restored value is shown until Home Assistant has started and the sources are back. |
@@ -78,7 +78,7 @@ A source that dies without becoming `unavailable` (common for battery Zigbee and
 | Stale after | 0 (off) | A `sensor` that hasn't reported for this long is ignored. Only turn this on for sources that send their value regularly even when it doesn't change. Many integrations, such as ESPHome and MQTT, only send changes, so a steady value would look like a dead device (in ESPHome, `force_update: true` makes a sensor re-send unchanged values). Not applied to `number`/`input_number`. |
 | Max deviation | – | Combine only. With ≥ 3 valid sources, ignore a source further than this from their median. |
 | Minimum valid sources | 1 | Combine only. Fewer valid sources than this = no new value. |
-| Hold last value for | 30 min | When there is no valid reading (or too few valid sources), keep showing the last good value (status `holding`), then become `unavailable`. Also limits how old a value restored after a restart may be. |
+| Hold last value for | 30 min | When there is no valid reading (or too few valid sources), keep showing the last good value (status `holding`), then become `unavailable`. While it is held, the time-based filters keep settling toward it. Also limits how old a value restored after a restart may be. |
 
 ### 3. Filters (applied in this order)
 
@@ -86,19 +86,22 @@ A source that dies without becoming `unavailable` (common for battery Zigbee and
 |---|---|---|
 | 1. Spike rejection | window (samples), max distance from median | A sample further than this from the window's median is ignored. A real, lasting change gets through after about half a window. |
 | 2. Rate limit | max change per minute | Clamps how fast the value may move. Must be greater than 0. |
-| 3. Low-pass | time constant (min) | Exponential smoothing on real time: after one time constant the output has moved ~63 % toward a new level. |
-| 4. Moving average | window (min) | Time-weighted average. |
+| 3. Exponential moving average over time (low-pass) | time constant (min) | Exponential smoothing on real time: after one time constant the output has moved ~63 % toward a new level, however often the sources report. Between reports, and while the last value is held, it keeps moving toward the last valid reading. |
+| 4. Exponential moving average over readings | readings N | Each new valid reading moves the output 2/(N+1) of the way toward it (N = 5: a third). A repeat of the same value counts too. Time plays no part, so if the source goes quiet the output stays where it is: for sources that only send changes, use the EMA over time. |
+| 5. Moving average | window (min) | Time-weighted average. |
 | Decimals | default 1 | Rounding of the final value only. |
 
-Each smoother adds delay. Usually *one* of low-pass or moving average is enough.
+Each smoother (3–5) adds delay. Usually *one* of them is enough.
 
 Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output, red rings are samples ignored by spike rejection. The same charts are shown in the setup dialog.
 
 | 1. Spike rejection | 2. Rate limit |
 |---|---|
 | ![Spike rejection on a noisy example](custom_components/safe_filters/charts/outlier.svg) | ![Rate limit on a noisy example](custom_components/safe_filters/charts/rate_limit.svg) |
-| **3. Low-pass** | **4. Moving average** |
-| ![Low-pass on a noisy example](custom_components/safe_filters/charts/lowpass.svg) | ![Moving average on a noisy example](custom_components/safe_filters/charts/moving_average.svg) |
+| **3. EMA over time (low-pass)** | **4. EMA over readings** |
+| ![Low-pass on a noisy example](custom_components/safe_filters/charts/lowpass.svg) | ![EMA over readings on a noisy example](custom_components/safe_filters/charts/ema.svg) |
+| **5. Moving average** | |
+| ![Moving average on a noisy example](custom_components/safe_filters/charts/moving_average.svg) | |
 
 ## Attributes
 
@@ -119,7 +122,7 @@ These are starting points. Adjust them to your sensors and how often they report
 
 - **Range:** wide enough for real extremes, narrow enough to catch typical glitches like -40 °C on a low battery, or 0.
 - **Stale after:** only for sources that send their value regularly even when it doesn't change. Set it to 2–3 × their longest normal interval. It applies to every source, so it has to suit the slowest one.
-- **Smoothing:** one smoother (low-pass *or* moving average) is usually enough. Keep it short when an automation has to react quickly.
+- **Smoothing:** one smoother (low-pass, EMA over readings *or* moving average) is usually enough. Low-pass below means the exponential moving average over time. Keep it short when an automation has to react quickly.
 
 ### Choosing a combine method
 

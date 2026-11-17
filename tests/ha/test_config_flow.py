@@ -23,6 +23,7 @@ FILTERS_INPUT = {
     "outlier": {"enabled": True, "window_size": 5.0, "radius": 2.0},
     "rate_limit": {"enabled": False, "max_rate": 1.0},
     "lowpass": {"enabled": False, "time_constant": 5.0},
+    "ema": {"enabled": False, "readings": 5.0},
     "moving_average": {"enabled": True, "window": 10.0},
     "precision": 1.0,
 }
@@ -86,7 +87,7 @@ async def test_full_flow(hass: HomeAssistant) -> None:
     _assert_serializable(result)
     placeholders = _placeholders(result)
     assert placeholders["unit"] == "°C"
-    for key in ("outlier", "rate_limit", "lowpass", "moving_average"):
+    for key in ("outlier", "rate_limit", "lowpass", "ema", "moving_average"):
         assert placeholders[f"{key}_chart"].startswith("data:image/svg+xml;base64,PHN2Zy")
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], FILTERS_INPUT)

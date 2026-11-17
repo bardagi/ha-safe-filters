@@ -5,6 +5,7 @@ import math
 import pytest
 
 from custom_components.safe_filters.engine import (
+    EmaStage,
     LowPassStage,
     MovingAverageStage,
     OutlierStage,
@@ -127,6 +128,47 @@ class TestLowPass:
         stage = LowPassStage(time_constant_s=60)
         stage.process(5.0, 100, True)
         assert stage.process(50.0, 100, True) == 5.0
+
+
+class TestEma:
+    def test_step_response_per_reading(self) -> None:
+        stage = EmaStage(readings=3)  # alpha = 0.5
+        assert stage.process(0.0, 0, True) == 0.0
+        assert stage.process(10.0, 1, True) == pytest.approx(5.0)
+        assert stage.process(10.0, 2, True) == pytest.approx(7.5)
+
+    def test_time_plays_no_part(self) -> None:
+        quick = EmaStage(readings=3)
+        slow = EmaStage(readings=3)
+        for stage, gap in ((quick, 1), (slow, 3600)):
+            stage.process(0.0, 0, True)
+            stage.process(10.0, gap, True)
+        assert quick.dump() == slow.dump()
+
+    def test_ticks_do_not_move_it(self) -> None:
+        stage = EmaStage(readings=3)
+        stage.process(0.0, 0, True)
+        stage.process(10.0, 1, True)
+        for t in range(2, 100):
+            assert stage.process(10.0, t, False) == pytest.approx(5.0)
+
+    def test_one_reading_passes_through(self) -> None:
+        stage = EmaStage(readings=1)
+        stage.process(0.0, 0, True)
+        assert stage.process(7.0, 1, True) == 7.0
+
+    def test_first_value_seeds_even_on_a_tick(self) -> None:
+        assert EmaStage(readings=5).process(4.0, 0, False) == 4.0
+
+    def test_roundtrip_and_reset(self) -> None:
+        stage = EmaStage(readings=5)
+        stage.process(1.0, 0, True)
+        stage.process(4.0, 1, True)
+        copy = EmaStage(readings=5)
+        copy.load(stage.dump())
+        assert copy.process(4.0, 2, True) == stage.process(4.0, 2, True)
+        stage.reset()
+        assert stage.process(9.0, 3, True) == 9.0
 
 
 class TestMovingAverage:

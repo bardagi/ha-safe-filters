@@ -23,7 +23,15 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache_with_extra_data,
 )
 
-from .conftest import ENTITY_ID, SOURCES, get_state, set_temp, setup_entry, single_options
+from .conftest import (
+    ENTITY_ID,
+    SOURCES,
+    TEMP_ATTRS,
+    get_state,
+    set_temp,
+    setup_entry,
+    single_options,
+)
 
 
 async def _tick(hass: HomeAssistant, freezer: FrozenDateTimeFactory, minutes: float) -> None:
@@ -285,6 +293,60 @@ async def test_lowpass_smooths_over_time(
     await _tick(hass, freezer, 5)
     # One time constant later: ~63% of the way there, even with no new reports.
     assert 5.5 < float(get_state(hass).state) < 7.0
+
+
+async def test_ema_counts_every_valid_report(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Re-sending the same value is a reading too; an attribute change or time is not."""
+    set_temp(hass, "sensor.temp_a", 0.0)
+    await setup_entry(hass, single_options(ema={"enabled": True, "readings": 3.0}, precision=2.0))
+    assert float(get_state(hass).state) == 0.0
+
+    set_temp(hass, "sensor.temp_a", 10.0)  # alpha = 0.5
+    await hass.async_block_till_done()
+    assert float(get_state(hass).state) == 5.0
+
+    set_temp(hass, "sensor.temp_a", 10.0)  # unchanged: a "state reported" event
+    await hass.async_block_till_done()
+    assert float(get_state(hass).state) == 7.5
+
+    hass.states.async_set("sensor.temp_a", "10.0", TEMP_ATTRS, force_update=True)
+    await hass.async_block_till_done()
+    assert float(get_state(hass).state) == 8.75
+
+    set_temp(hass, "sensor.temp_a", 10.0, friendly_name="Renamed")  # attributes only
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 30)
+    assert float(get_state(hass).state) == 8.75
+
+
+async def test_lowpass_keeps_settling_while_source_is_stale(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The last reading is used however old it is: the step isn't frozen halfway."""
+    set_temp(hass, "sensor.temp_a", 0.0)
+    await setup_entry(
+        hass,
+        single_options(
+            lowpass={"enabled": True, "time_constant": 5.0},
+            stale_after=2.0,
+            hold_time=60.0,
+            precision=2.0,
+        ),
+    )
+    set_temp(hass, "sensor.temp_a", 10.0)
+    await hass.async_block_till_done()
+
+    await _tick(hass, freezer, 5)
+    state = get_state(hass)
+    assert state.attributes["status"] == "holding"
+    assert state.attributes["sources"]["sensor.temp_a"]["status"] == "stale"
+    assert 5.5 < float(state.state) < 7.0
+
+    await _tick(hass, freezer, 30)
+    assert get_state(hass).attributes["status"] == "holding"
+    assert float(get_state(hass).state) == pytest.approx(10.0, abs=0.01)
 
 
 async def test_diagnostic_changes_wait_for_tick(

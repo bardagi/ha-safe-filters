@@ -10,11 +10,19 @@ from .pipeline import (
     PipelineResult,
     PipelineStatus,
 )
-from .stages import LowPassStage, MovingAverageStage, OutlierStage, RateLimitStage, Stage
+from .stages import (
+    EmaStage,
+    LowPassStage,
+    MovingAverageStage,
+    OutlierStage,
+    RateLimitStage,
+    Stage,
+)
 from .validation import SourceReading, SourceStatus, ValidationConfig, validate
 
 __all__ = [
     "CombineMethod",
+    "EmaStage",
     "LowPassStage",
     "MovingAverageStage",
     "OffsetLearner",

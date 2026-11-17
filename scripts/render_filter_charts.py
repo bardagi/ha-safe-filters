@@ -18,6 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from custom_components.safe_filters.engine.stages import (  # noqa: E402
+    EmaStage,
     LowPassStage,
     MovingAverageStage,
     OutlierStage,
@@ -42,6 +43,8 @@ STAGES: dict[str, Callable[[], Stage]] = {
     "outlier": lambda: OutlierStage(window_size=5, radius=1.0),
     "rate_limit": lambda: RateLimitStage(max_rate_per_min=0.5),
     "lowpass": lambda: LowPassStage(time_constant_s=180),
+    # alpha = 1/6: about as smooth as the low-pass above at one sample per 30 s.
+    "ema": lambda: EmaStage(readings=11),
     "moving_average": lambda: MovingAverageStage(window_s=300),
 }
 

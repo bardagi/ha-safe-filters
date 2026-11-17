@@ -72,7 +72,7 @@
       },
       "filters": {
         "title": "Filters",
-        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough. Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output.",
+        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother (3 to 5) adds delay, so usually one of them is enough. Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output.",
         "data": {
           "precision": "Decimals"
         },
@@ -103,17 +103,27 @@
             }
           },
           "lowpass": {
-            "name": "3. Low-pass",
+            "name": "3. Exponential moving average over time (low-pass)",
             "data": {
               "enabled": "Enabled",
               "time_constant": "Time constant"
             },
             "data_description": {
-              "time_constant": "Time-based exponential smoothing. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report.\n\n![Low-pass on a noisy example]({lowpass_chart})"
+              "time_constant": "Exponential smoothing on real time, also known as a low-pass filter. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report. Between reports, and while the last value is held, it keeps moving toward the last valid reading.\n\n![Low-pass on a noisy example]({lowpass_chart})"
+            }
+          },
+          "ema": {
+            "name": "4. Exponential moving average over readings",
+            "data": {
+              "enabled": "Enabled",
+              "readings": "Readings"
+            },
+            "data_description": {
+              "readings": "Each new valid reading moves the output 2/(N+1) of the way toward it: with 5 readings, a third of the way. A source that sends the same value again counts each time. Time plays no part: if the source stops reporting, the output stays where it is, so for sources that only send changes the average over time is usually better.\n\n![Exponential moving average over readings on a noisy example]({ema_chart})"
             }
           },
           "moving_average": {
-            "name": "4. Moving average",
+            "name": "5. Moving average",
             "data": {
               "enabled": "Enabled",
               "window": "Window"
@@ -197,7 +207,7 @@
       },
       "filters": {
         "title": "Filters",
-        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough. Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output.",
+        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother (3 to 5) adds delay, so usually one of them is enough. Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output.",
         "data": {
           "precision": "Decimals"
         },
@@ -228,17 +238,27 @@
             }
           },
           "lowpass": {
-            "name": "3. Low-pass",
+            "name": "3. Exponential moving average over time (low-pass)",
             "data": {
               "enabled": "Enabled",
               "time_constant": "Time constant"
             },
             "data_description": {
-              "time_constant": "Time-based exponential smoothing. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report.\n\n![Low-pass on a noisy example]({lowpass_chart})"
+              "time_constant": "Exponential smoothing on real time, also known as a low-pass filter. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report. Between reports, and while the last value is held, it keeps moving toward the last valid reading.\n\n![Low-pass on a noisy example]({lowpass_chart})"
+            }
+          },
+          "ema": {
+            "name": "4. Exponential moving average over readings",
+            "data": {
+              "enabled": "Enabled",
+              "readings": "Readings"
+            },
+            "data_description": {
+              "readings": "Each new valid reading moves the output 2/(N+1) of the way toward it: with 5 readings, a third of the way. A source that sends the same value again counts each time. Time plays no part: if the source stops reporting, the output stays where it is, so for sources that only send changes the average over time is usually better.\n\n![Exponential moving average over readings on a noisy example]({ema_chart})"
             }
           },
           "moving_average": {
-            "name": "4. Moving average",
+            "name": "5. Moving average",
             "data": {
               "enabled": "Enabled",
               "window": "Window"

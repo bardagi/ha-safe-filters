@@ -40,6 +40,9 @@ CONF_RATE_LIMIT = "rate_limit"
 CONF_MAX_RATE = "max_rate"
 CONF_LOWPASS = "lowpass"
 CONF_TIME_CONSTANT = "time_constant"
+CONF_EMA = "ema"
+"""Exponential moving average over readings (the low-pass is the one over time)."""
+CONF_READINGS = "readings"
 CONF_MOVING_AVERAGE = "moving_average"
 CONF_WINDOW = "window"
 CONF_PRECISION = "precision"
@@ -55,6 +58,7 @@ DEFAULT_OUTLIER_WINDOW = 5
 DEFAULT_OUTLIER_RADIUS = 2.0
 DEFAULT_MAX_RATE = 1.0  # units per minute
 DEFAULT_TIME_CONSTANT = 5.0  # minutes
+DEFAULT_EMA_READINGS = 5
 DEFAULT_MA_WINDOW = 10.0  # minutes
 DEFAULT_PRECISION = 1
 
@@ -106,6 +110,7 @@ def build_config(options: Mapping[str, Any]) -> PipelineConfig:
     outlier_opts = _enabled_section(options, CONF_OUTLIER)
     rate_opts = _enabled_section(options, CONF_RATE_LIMIT)
     lowpass_opts = _enabled_section(options, CONF_LOWPASS)
+    ema_opts = _enabled_section(options, CONF_EMA)
     ma_opts = _enabled_section(options, CONF_MOVING_AVERAGE)
 
     max_rate = None if rate_opts is None else float(rate_opts.get(CONF_MAX_RATE, DEFAULT_MAX_RATE))
@@ -137,6 +142,9 @@ def build_config(options: Mapping[str, Any]) -> PipelineConfig:
         if lowpass_opts is None
         else float(lowpass_opts.get(CONF_TIME_CONSTANT, DEFAULT_TIME_CONSTANT))
         * SECONDS_PER_MINUTE,
+        ema_readings=None
+        if ema_opts is None
+        else max(1, int(ema_opts.get(CONF_READINGS, DEFAULT_EMA_READINGS))),
         moving_average_window_s=None
         if ma_opts is None
         else float(ma_opts.get(CONF_WINDOW, DEFAULT_MA_WINDOW)) * SECONDS_PER_MINUTE,

@@ -117,14 +117,15 @@ class RateLimitStage(Stage):
 
 
 class LowPassStage(Stage):
-    """Time-aware exponential low-pass: ``alpha = 1 - exp(-dt / tau)``.
+    """Time-based exponential moving average (low-pass): ``alpha = 1 - exp(-dt / tau)``.
 
     Unlike Home Assistant's built-in ``lowpass`` filter (whose time constant is
     counted in *samples*), the smoothing here depends on real elapsed time, so it
     behaves the same whether a sensor reports every 10 seconds or every 5 minutes.
 
     The input is held at its previous value until a new one arrives (as in the
-    moving average), so a new reading only affects the output from that moment on.
+    moving average), so a new reading only affects the output from that moment on,
+    and the output keeps moving toward the last reading for as long as it lasts.
     """
 
     kind = "lowpass"
@@ -167,6 +168,38 @@ class LowPassStage(Stage):
         self._output = None if output is None else float(output)
         self._input = None if value_in is None else float(value_in)
         self._time = None if time is None else float(time)
+
+
+class EmaStage(Stage):
+    """Exponential moving average over readings: ``alpha = 2 / (readings + 1)``.
+
+    Each new sample moves the output ``alpha`` of the way toward it, however much
+    time has passed; ticks don't move it. The first sample is taken as is.
+    """
+
+    kind = "ema"
+
+    def __init__(self, readings: int) -> None:
+        self.readings = max(1, int(readings))
+        self.alpha = 2.0 / (self.readings + 1)
+        self._output: float | None = None
+
+    def process(self, value: float, now: float, new_sample: bool) -> float:
+        if self._output is None:
+            self._output = value
+        elif new_sample:
+            self._output += self.alpha * (value - self._output)
+        return self._output
+
+    def reset(self) -> None:
+        self._output = None
+
+    def dump(self) -> dict[str, Any]:
+        return {"output": self._output}
+
+    def load(self, data: Mapping[str, Any]) -> None:
+        output = data["output"]
+        self._output = None if output is None else float(output)
 
 
 class MovingAverageStage(Stage):
