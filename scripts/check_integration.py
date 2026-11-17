@@ -3,6 +3,7 @@
 - Every translation file has exactly the same keys and ``{placeholders}`` as en.json.
 - The version in manifest.json matches pyproject.toml.
 - The brand icon exists (required by HACS).
+- Every filter chart exists (the Filters step of the config flow embeds them).
 
 Usage: uv run python scripts/check_integration.py
 """
@@ -72,9 +73,20 @@ def check_brand() -> list[str]:
     ]
 
 
+def check_charts() -> list[str]:
+    """Every ``{<key>_chart}`` placeholder in en.json needs charts/<key>.svg."""
+    en = (INTEGRATION / "translations" / "en.json").read_text("utf-8")
+    keys = sorted(set(re.findall(r"\{(\w+)_chart\}", en)))
+    return [
+        f"missing charts/{key}.svg (run scripts/render_filter_charts.py)"
+        for key in keys
+        if not (INTEGRATION / "charts" / f"{key}.svg").is_file()
+    ]
+
+
 def main() -> int:
     """Run all checks and print problems."""
-    errors = check_translations() + check_versions() + check_brand()
+    errors = check_translations() + check_versions() + check_brand() + check_charts()
     for error in errors:
         print(error, file=sys.stderr)
     return 1 if errors else 0

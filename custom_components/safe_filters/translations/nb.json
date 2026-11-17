@@ -64,7 +64,7 @@
       },
       "filters": {
         "title": "Filtre",
-        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt. Hver graf viser ett filter alene, brukt på det samme støyete eksempelet: grått er inndata, blått er utdata.",
         "data": {
           "precision": "Desimaler"
         },
@@ -81,7 +81,7 @@
             },
             "data_description": {
               "window_size": "Antall nylige målinger det sammenlignes med.",
-              "radius": "En måling som ligger lenger unna medianen i vinduet enn dette, ignoreres. En reell, varig endring godtas etter omtrent et halvt vindu."
+              "radius": "En måling som ligger lenger unna medianen i vinduet enn dette, ignoreres. En reell, varig endring godtas etter omtrent et halvt vindu. Røde ringer markerer ignorerte målinger.\n\n![Fjerning av spisser på et støyete eksempel]({outlier_chart})"
             }
           },
           "rate_limit": {
@@ -91,7 +91,7 @@
               "max_rate": "Maks endring per minutt"
             },
             "data_description": {
-              "max_rate": "Verdien kan ikke endre seg raskere enn dette, i sensorens enhet per minutt."
+              "max_rate": "Verdien kan ikke endre seg raskere enn dette, i sensorens enhet per minutt.\n\n![Endringsgrense på et støyete eksempel]({rate_limit_chart})"
             }
           },
           "lowpass": {
@@ -101,7 +101,7 @@
               "time_constant": "Tidskonstant"
             },
             "data_description": {
-              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer."
+              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer.\n\n![Lavpass på et støyete eksempel]({lowpass_chart})"
             }
           },
           "moving_average": {
@@ -111,7 +111,7 @@
               "window": "Vindu"
             },
             "data_description": {
-              "window": "Tidsvektet gjennomsnitt over denne perioden."
+              "window": "Tidsvektet gjennomsnitt over denne perioden.\n\n![Glidende gjennomsnitt på et støyete eksempel]({moving_average_chart})"
             }
           }
         }
@@ -181,7 +181,7 @@
       },
       "filters": {
         "title": "Filtre",
-        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt.",
+        "description": "Valgfrie filtre som brukes i denne rekkefølgen på kildeverdien (eller den kombinerte verdien). Verdiene er i {unit}. Hver utjevning gir forsinkelse, så vanligvis holder det med enten lavpass eller glidende gjennomsnitt. Hver graf viser ett filter alene, brukt på det samme støyete eksempelet: grått er inndata, blått er utdata.",
         "data": {
           "precision": "Desimaler"
         },
@@ -198,7 +198,7 @@
             },
             "data_description": {
               "window_size": "Antall nylige målinger det sammenlignes med.",
-              "radius": "En måling som ligger lenger unna medianen i vinduet enn dette, ignoreres. En reell, varig endring godtas etter omtrent et halvt vindu."
+              "radius": "En måling som ligger lenger unna medianen i vinduet enn dette, ignoreres. En reell, varig endring godtas etter omtrent et halvt vindu. Røde ringer markerer ignorerte målinger.\n\n![Fjerning av spisser på et støyete eksempel]({outlier_chart})"
             }
           },
           "rate_limit": {
@@ -208,7 +208,7 @@
               "max_rate": "Maks endring per minutt"
             },
             "data_description": {
-              "max_rate": "Verdien kan ikke endre seg raskere enn dette, i sensorens enhet per minutt."
+              "max_rate": "Verdien kan ikke endre seg raskere enn dette, i sensorens enhet per minutt.\n\n![Endringsgrense på et støyete eksempel]({rate_limit_chart})"
             }
           },
           "lowpass": {
@@ -218,7 +218,7 @@
               "time_constant": "Tidskonstant"
             },
             "data_description": {
-              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer."
+              "time_constant": "Tidsbasert eksponentiell utjevning. Etter én tidskonstant har verdien flyttet seg omtrent 63 % mot et nytt nivå, uansett hvor ofte kildene rapporterer.\n\n![Lavpass på et støyete eksempel]({lowpass_chart})"
             }
           },
           "moving_average": {
@@ -228,7 +228,7 @@
               "window": "Vindu"
             },
             "data_description": {
-              "window": "Tidsvektet gjennomsnitt over denne perioden."
+              "window": "Tidsvektet gjennomsnitt over denne perioden.\n\n![Glidende gjennomsnitt på et støyete eksempel]({moving_average_chart})"
             }
           }
         }

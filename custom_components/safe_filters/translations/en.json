@@ -64,7 +64,7 @@
       },
       "filters": {
         "title": "Filters",
-        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough.",
+        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough. Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output.",
         "data": {
           "precision": "Decimals"
         },
@@ -81,7 +81,7 @@
             },
             "data_description": {
               "window_size": "Number of recent samples to compare against.",
-              "radius": "A sample further than this from the median of the window is ignored. A real, lasting change is accepted after about half the window."
+              "radius": "A sample further than this from the median of the window is ignored. A real, lasting change is accepted after about half the window. Red rings mark ignored samples.\n\n![Spike rejection on a noisy example]({outlier_chart})"
             }
           },
           "rate_limit": {
@@ -91,7 +91,7 @@
               "max_rate": "Max change per minute"
             },
             "data_description": {
-              "max_rate": "The value may not change faster than this, in the sensor's unit per minute."
+              "max_rate": "The value may not change faster than this, in the sensor's unit per minute.\n\n![Rate limit on a noisy example]({rate_limit_chart})"
             }
           },
           "lowpass": {
@@ -101,7 +101,7 @@
               "time_constant": "Time constant"
             },
             "data_description": {
-              "time_constant": "Time-based exponential smoothing. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report."
+              "time_constant": "Time-based exponential smoothing. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report.\n\n![Low-pass on a noisy example]({lowpass_chart})"
             }
           },
           "moving_average": {
@@ -111,7 +111,7 @@
               "window": "Window"
             },
             "data_description": {
-              "window": "Time-weighted average over this period."
+              "window": "Time-weighted average over this period.\n\n![Moving average on a noisy example]({moving_average_chart})"
             }
           }
         }
@@ -181,7 +181,7 @@
       },
       "filters": {
         "title": "Filters",
-        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough.",
+        "description": "Optional filters, applied in this order to the source value (or the combined value). Values are in {unit}. Each smoother adds delay, so usually one of low-pass or moving average is enough. Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output.",
         "data": {
           "precision": "Decimals"
         },
@@ -198,7 +198,7 @@
             },
             "data_description": {
               "window_size": "Number of recent samples to compare against.",
-              "radius": "A sample further than this from the median of the window is ignored. A real, lasting change is accepted after about half the window."
+              "radius": "A sample further than this from the median of the window is ignored. A real, lasting change is accepted after about half the window. Red rings mark ignored samples.\n\n![Spike rejection on a noisy example]({outlier_chart})"
             }
           },
           "rate_limit": {
@@ -208,7 +208,7 @@
               "max_rate": "Max change per minute"
             },
             "data_description": {
-              "max_rate": "The value may not change faster than this, in the sensor's unit per minute."
+              "max_rate": "The value may not change faster than this, in the sensor's unit per minute.\n\n![Rate limit on a noisy example]({rate_limit_chart})"
             }
           },
           "lowpass": {
@@ -218,7 +218,7 @@
               "time_constant": "Time constant"
             },
             "data_description": {
-              "time_constant": "Time-based exponential smoothing. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report."
+              "time_constant": "Time-based exponential smoothing. After one time constant the output has moved about 63% of the way to a new level, no matter how often the sources report.\n\n![Low-pass on a noisy example]({lowpass_chart})"
             }
           },
           "moving_average": {
@@ -228,7 +228,7 @@
               "window": "Window"
             },
             "data_description": {
-              "window": "Time-weighted average over this period."
+              "window": "Time-weighted average over this period.\n\n![Moving average on a noisy example]({moving_average_chart})"
             }
           }
         }

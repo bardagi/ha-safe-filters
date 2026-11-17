@@ -84,6 +84,10 @@ async def test_full_flow(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(result["flow_id"], QUALITY_INPUT)
     assert result["step_id"] == "filters"
     _assert_serializable(result)
+    placeholders = _placeholders(result)
+    assert placeholders["unit"] == "°C"
+    for key in ("outlier", "rate_limit", "lowpass", "moving_average"):
+        assert placeholders[f"{key}_chart"].startswith("data:image/svg+xml;base64,PHN2Zy")
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], FILTERS_INPUT)
     await hass.async_block_till_done()

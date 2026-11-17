@@ -54,7 +54,7 @@ repos:
         name: translations, versions and brand icon
         entry: uv run --frozen python scripts/check_integration.py
         language: system
-        files: ^(custom_components/safe_filters/.*\.(json|png)|hacs\.json|pyproject\.toml|scripts/check_integration\.py)$
+        files: ^(custom_components/safe_filters/.*\.(json|png|svg)|hacs\.json|pyproject\.toml|scripts/check_integration\.py)$
         pass_filenames: false
 
       - id: render-brand
@@ -62,4 +62,11 @@ repos:
         entry: uv run --frozen python scripts/render_brand.py
         language: system
         files: ^(assets/icon\.svg|scripts/render_brand\.py)$
+        pass_filenames: false
+
+      - id: render-filter-charts
+        name: filter charts match the filter code
+        entry: uv run --frozen python scripts/render_filter_charts.py
+        language: system
+        files: ^(custom_components/safe_filters/(engine/stages\.py|charts/.*\.svg)|scripts/render_filter_charts\.py)$
         pass_filenames: false
