@@ -36,6 +36,14 @@
       "weights": {
         "title": "Weights",
         "description": "Give each source a relative weight. A source with weight 2 counts twice as much as one with weight 1. Weights are renormalised over the sources that are valid at any moment.\n\n{sources}",
+        "data": {
+          "min_weight": "Minimum valid weight",
+          "offset_learning": "Offset learning time"
+        },
+        "data_description": {
+          "min_weight": "The valid sources must together carry at least this share of the total weight to compute a new value. With weights 5, 3 and 2 and 50 %, the first source alone or the other two together are enough, but the last one alone is not. Applies in addition to Minimum valid sources. 0 turns it off.",
+          "offset_learning": "While all sources are valid, learn how far each one usually is from the combined value, and correct for it when one drops out, so the value doesn't jump. This sets how quickly the learned offsets follow changes; 60 min is a good start. 0 turns it off."
+        },
         "sections": {
           "weights": {
             "name": "Weight per source"
@@ -153,6 +161,14 @@
       "weights": {
         "title": "Weights",
         "description": "Give each source a relative weight. A source with weight 2 counts twice as much as one with weight 1. Weights are renormalised over the sources that are valid at any moment.\n\n{sources}",
+        "data": {
+          "min_weight": "Minimum valid weight",
+          "offset_learning": "Offset learning time"
+        },
+        "data_description": {
+          "min_weight": "The valid sources must together carry at least this share of the total weight to compute a new value. With weights 5, 3 and 2 and 50 %, the first source alone or the other two together are enough, but the last one alone is not. Applies in addition to Minimum valid sources. 0 turns it off.",
+          "offset_learning": "While all sources are valid, learn how far each one usually is from the combined value, and correct for it when one drops out, so the value doesn't jump. This sets how quickly the learned offsets follow changes; 60 min is a good start. 0 turns it off."
+        },
         "sections": {
           "weights": {
             "name": "Weight per source"

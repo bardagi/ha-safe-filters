@@ -5,18 +5,23 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from .combine import CombineMethod, combine
+from .combine import CombineMethod, combine, effective_weights, weight_of
+from .compensation import OffsetLearner
 from .stages import LowPassStage, MovingAverageStage, OutlierStage, RateLimitStage, Stage
 from .validation import SourceReading, SourceStatus, ValidationConfig, validate
 
 _LOGGER = logging.getLogger(__name__)
 
 STATE_VERSION = 1
+
+# Tolerance for comparing weight shares, so e.g. 30 % + 20 % counts as 50 %.
+_SHARE_EPSILON = 1e-9
 
 
 class PipelineStatus(StrEnum):
@@ -49,6 +54,10 @@ class PipelineConfig:
     weights: Mapping[str, float] = field(default_factory=dict)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     min_sources: int = 1
+    min_weight_share: float = 0.0
+    """Weighted mean only: share (0..1) of the total weight that must be valid."""
+    offset_time_constant_s: float | None = None
+    """Weighted mean only: learn source offsets over this time to bridge dropouts."""
     hold_time_s: float = 1800.0
     outlier: OutlierConfig | None = None
     max_rate_per_min: float | None = None
@@ -88,6 +97,10 @@ class PipelineResult:
     combined: float | None
     """Combined value before filtering; ``None`` without quorum."""
     sources: tuple[SourceReading, ...]
+    shares: Mapping[str, float] = field(default_factory=dict)
+    """Weighted mean only: each source's share (0..1) of ``combined``; 0 when not used."""
+    offsets: Mapping[str, float] = field(default_factory=dict)
+    """Offset learning only: how far each source usually is from the full weighted mean."""
 
     @property
     def valid_count(self) -> int:
@@ -116,6 +129,12 @@ class Pipeline:
         self.config = config
         self.fingerprint = config.state_fingerprint()
         self.stages = build_stages(config)
+        self._weighted = config.method is CombineMethod.WEIGHTED_MEAN
+        self._learner = (
+            OffsetLearner(config.sources, config.weights, config.offset_time_constant_s)
+            if self._weighted and config.offset_time_constant_s is not None
+            else None
+        )
         self._value: float | None = None
         """Unrounded filter output (also what is held during a dropout)."""
         self._last_good: float | None = None
@@ -137,8 +156,11 @@ class Pipeline:
             if r.status is SourceStatus.OK and r.value is not None
         ]
 
-        if valid and len(valid) >= config.min_sources:
-            combined = combine(valid, config.method, config.weights)
+        if valid and len(valid) >= config.min_sources and self._enough_weight(valid):
+            if self._learner is not None:
+                combined = self._learner.combine(valid, now)
+            else:
+                combined = combine(valid, config.method, config.weights)
             if self._value is None:
                 # Starting up or recovering from "no data": old history is irrelevant.
                 self._reset_stages()
@@ -148,7 +170,10 @@ class Pipeline:
             self._value = value
             self._last_good = now
             self._restored = False
-            return PipelineResult(self._round(value), PipelineStatus.OK, combined, checked)
+            return self._result(self._round(value), PipelineStatus.OK, combined, checked, valid)
+
+        if self._learner is not None:
+            self._learner.advance(now)
 
         if (
             self._value is not None
@@ -156,11 +181,38 @@ class Pipeline:
             and now - self._last_good <= config.hold_time_s
         ):
             status = PipelineStatus.RESTORED if self._restored else PipelineStatus.HOLDING
-            return PipelineResult(self._round(self._value), status, None, checked)
+            return self._result(self._round(self._value), status, None, checked, [])
 
         self._value = None
         self._restored = False
-        return PipelineResult(None, PipelineStatus.NO_DATA, None, checked)
+        return self._result(None, PipelineStatus.NO_DATA, None, checked, [])
+
+    def _enough_weight(self, valid: Sequence[tuple[str, float]]) -> bool:
+        """Whether the valid sources carry the required share of the total weight."""
+        config = self.config
+        if not self._weighted or config.min_weight_share <= 0:
+            return True
+        total = math.fsum(weight_of(config.weights, source) for source in config.sources)
+        if total <= 0:
+            # Every weight is 0, so they all count equally: no share to require.
+            return True
+        share = math.fsum(weight_of(config.weights, entity_id) for entity_id, _ in valid) / total
+        return share >= config.min_weight_share - _SHARE_EPSILON
+
+    def _result(
+        self,
+        value: float | None,
+        status: PipelineStatus,
+        combined: float | None,
+        checked: tuple[SourceReading, ...],
+        used: Sequence[tuple[str, float]],
+    ) -> PipelineResult:
+        shares: dict[str, float] = {}
+        if self._weighted:
+            used_shares = effective_weights(used, self.config.weights) if used else {}
+            shares = {r.entity_id: used_shares.get(r.entity_id, 0.0) for r in checked}
+        offsets = {} if self._learner is None else self._learner.offsets
+        return PipelineResult(value, status, combined, checked, shares, offsets)
 
     def dump(self) -> dict[str, Any]:
         """Serialise everything needed to resume after a restart."""
@@ -170,6 +222,7 @@ class Pipeline:
             "value": self._value,
             "last_good": self._last_good,
             "stages": {stage.kind: stage.dump() for stage in self.stages},
+            "offsets": None if self._learner is None else self._learner.dump(),
         }
 
     def restore(self, data: Mapping[str, Any] | None, now: float) -> bool:
@@ -177,11 +230,19 @@ class Pipeline:
 
         The value is only restored if it is not older than the hold time; it is
         then shown (status ``restored``) until fresh data arrives or the hold time,
-        counted from when the value was last good, runs out. Filter state is only
-        reused when the filter settings are unchanged.
+        counted from when the value was last good, runs out. Filter state and
+        learned source offsets are only reused when the settings they depend on are
+        unchanged. The offsets are kept even when the value is too old to restore.
         """
         if not data or data.get("version") != STATE_VERSION:
             return False
+        same_settings = data.get("fingerprint") == self.fingerprint
+        if same_settings and self._learner is not None:
+            try:
+                self._learner.load(data.get("offsets"))
+            except (AttributeError, TypeError, ValueError) as err:
+                _LOGGER.debug("Discarding saved source offsets: %s", err)
+                self._learner.reset()
         try:
             value = data["value"]
             last_good = data["last_good"]
@@ -197,7 +258,7 @@ class Pipeline:
         self._last_good = last_good
         self._restored = True
 
-        if data.get("fingerprint") == self.fingerprint:
+        if same_settings:
             try:
                 saved = data["stages"]
                 for stage in self.stages:

@@ -69,6 +69,51 @@ def test_zero_rate_limit_is_ignored() -> None:
     assert config.max_rate_per_min is None
 
 
+def test_weighted_extras_are_converted() -> None:
+    config = build_config(
+        {
+            "entity_ids": ["sensor.a", "sensor.b"],
+            "method": "weighted_mean",
+            "weights": {"sensor.a": 5.0, "sensor.b": 3.0},
+            "min_weight": 50.0,
+            "offset_learning": 60.0,
+        }
+    )
+    assert config.min_weight_share == 0.5
+    assert config.offset_time_constant_s == 3600.0
+
+
+def test_weighted_extras_default_off() -> None:
+    config = build_config({"entity_ids": ["sensor.a"], "method": "weighted_mean"})
+    assert config.min_weight_share == 0.0
+    assert config.offset_time_constant_s is None
+
+    config = build_config(
+        {
+            "entity_ids": ["sensor.a"],
+            "method": "weighted_mean",
+            "min_weight": 0,
+            "offset_learning": 0,
+        }
+    )
+    assert config.min_weight_share == 0.0
+    assert config.offset_time_constant_s is None
+
+
+def test_weighted_extras_ignored_for_other_methods() -> None:
+    """Left over after switching away from weighted mean: must not apply."""
+    config = build_config(
+        {
+            "entity_ids": ["sensor.a", "sensor.b"],
+            "method": "median",
+            "min_weight": 50.0,
+            "offset_learning": 60.0,
+        }
+    )
+    assert config.min_weight_share == 0.0
+    assert config.offset_time_constant_s is None
+
+
 def test_stale_zero_disables() -> None:
     config = build_config({"entity_ids": ["sensor.a"], "method": "min", "stale_after": 0})
     assert config.validation.stale_after_s == 0.0

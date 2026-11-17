@@ -132,6 +132,106 @@ def test_rounds_only_at_output() -> None:
     assert result.value == 1.0
 
 
+WEIGHTS = {"sensor.a": 50.0, "sensor.b": 30.0, "sensor.c": 20.0}
+
+
+def make_weighted(**kwargs) -> Pipeline:
+    kwargs.setdefault("weights", WEIGHTS)
+    return make(method=CombineMethod.WEIGHTED_MEAN, **kwargs)
+
+
+class TestWeighted:
+    @pytest.mark.parametrize(
+        "weights",
+        [WEIGHTS, {"sensor.a": 0.5, "sensor.b": 0.3, "sensor.c": 0.2}],
+    )
+    def test_min_weight_share(self, weights) -> None:
+        """50/30/20 needing 50 %: A alone or B+C is enough, C alone is not."""
+        pipeline = make_weighted(weights=weights, min_weight_share=0.5, hold_time_s=600)
+        assert pipeline.evaluate(readings(22.0, None, None), 0, True).status is PipelineStatus.OK
+        both = pipeline.evaluate(readings(None, 21.0, 19.0), 60, True)
+        assert both.status is PipelineStatus.OK
+
+        held = pipeline.evaluate(readings(None, None, 19.0), 120, True)
+        assert held.status is PipelineStatus.HOLDING
+        assert held.value == both.value
+        assert held.shares == {"sensor.a": 0.0, "sensor.b": 0.0, "sensor.c": 0.0}
+        gone = pipeline.evaluate(readings(None, None, 19.0), 661, False)
+        assert gone.status is PipelineStatus.NO_DATA
+
+    def test_min_weight_share_and_min_sources_both_apply(self) -> None:
+        pipeline = make_weighted(min_weight_share=0.5, min_sources=2, hold_time_s=0)
+        assert pipeline.evaluate(readings(22.0, None, None), 0, True).status is (
+            PipelineStatus.NO_DATA
+        )
+
+    def test_min_weight_share_ignored_when_all_weights_are_zero(self) -> None:
+        pipeline = make_weighted(
+            weights={"sensor.a": 0.0, "sensor.b": 0.0, "sensor.c": 0.0}, min_weight_share=0.9
+        )
+        assert pipeline.evaluate(readings(None, 21.0, 19.0), 0, True).value == 20.0
+
+    def test_shares(self) -> None:
+        result = make_weighted().evaluate(readings(None, 21.0, 19.0), 0, True)
+        assert result.combined == pytest.approx(20.2)
+        assert result.shares == pytest.approx({"sensor.a": 0.0, "sensor.b": 0.6, "sensor.c": 0.4})
+        assert result.offsets == {}
+
+    def test_no_shares_for_other_methods(self) -> None:
+        result = make(method=CombineMethod.MEAN).evaluate(readings(None, 21.0, 19.0), 0, True)
+        assert result.shares == {}
+
+    def test_offset_learning_bridges_a_dropout(self) -> None:
+        pipeline = make_weighted(offset_time_constant_s=3600)
+        pipeline.evaluate(readings(22.0, 21.0, 19.0), 0, True)
+        result = pipeline.evaluate(readings(None, 21.0, 19.0), 60, True)
+        assert result.combined == pytest.approx(21.1)
+        assert result.offsets == pytest.approx(
+            {"sensor.a": 0.9, "sensor.b": -0.1, "sensor.c": -2.1}
+        )
+
+    def test_offset_learning_ignored_for_other_methods(self) -> None:
+        pipeline = make(method=CombineMethod.MEAN, offset_time_constant_s=3600)
+        pipeline.evaluate(readings(22.0, 21.0, 19.0), 0, True)
+        result = pipeline.evaluate(readings(None, 21.0, 19.0), 60, True)
+        assert result.combined == pytest.approx(20.0)
+        assert result.offsets == {}
+
+    def _learned_state(self) -> dict:
+        pipeline = make_weighted(offset_time_constant_s=3600, hold_time_s=1800)
+        pipeline.evaluate(readings(22.0, 21.0, 19.0), 0, True)
+        return pipeline.dump()
+
+    def test_offsets_survive_restore(self) -> None:
+        restored = make_weighted(offset_time_constant_s=3600, hold_time_s=1800)
+        assert restored.restore(self._learned_state(), now=60)
+        result = restored.evaluate(readings(None, 21.0, 19.0), 120, True)
+        assert result.combined == pytest.approx(21.1)
+
+    def test_offsets_restored_even_when_value_is_too_old(self) -> None:
+        restored = make_weighted(offset_time_constant_s=3600, hold_time_s=1800)
+        assert not restored.restore(self._learned_state(), now=36_000)
+        result = restored.evaluate(readings(None, 21.0, 19.0), 36_060, True)
+        assert result.combined == pytest.approx(21.1)
+
+    def test_changed_weights_discard_offsets(self) -> None:
+        restored = make_weighted(
+            weights={"sensor.a": 1.0, "sensor.b": 1.0, "sensor.c": 1.0},
+            offset_time_constant_s=3600,
+        )
+        assert restored.restore(self._learned_state(), now=60)
+        result = restored.evaluate(readings(None, 21.0, 19.0), 120, True)
+        assert result.combined == pytest.approx(20.0)
+
+    def test_corrupt_offsets_are_discarded(self) -> None:
+        state = self._learned_state()
+        state["offsets"] = "bogus"
+        restored = make_weighted(offset_time_constant_s=3600, hold_time_s=1800)
+        assert restored.restore(state, now=60)
+        result = restored.evaluate(readings(None, 21.0, 19.0), 120, True)
+        assert result.combined == pytest.approx(20.2)
+
+
 class TestRestore:
     def _warm(self) -> Pipeline:
         pipeline = make(hold_time_s=1800, lowpass_time_constant_s=600, precision=2)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
@@ -49,11 +50,27 @@ def combine(
     raise ValueError(f"Unknown combine method: {method}")
 
 
+def weight_of(weights: Mapping[str, float], entity_id: str) -> float:
+    """The configured weight of a source: missing means 1, negative means 0."""
+    return max(0.0, float(weights.get(entity_id, 1.0)))
+
+
+def effective_weights(
+    values: Sequence[tuple[str, float]], weights: Mapping[str, float]
+) -> dict[str, float]:
+    """Each valid source's share of a weighted mean; the shares sum to 1.
+
+    Weights are renormalised over the sources in ``values`` (the valid ones). If
+    every one of them has weight 0, they share equally rather than failing.
+    """
+    raw = {entity_id: weight_of(weights, entity_id) for entity_id, _ in values}
+    total = sum(raw.values())
+    if total <= 0:
+        return {entity_id: 1.0 / len(raw) for entity_id in raw}
+    return {entity_id: weight / total for entity_id, weight in raw.items()}
+
+
 def _weighted_mean(values: Sequence[tuple[str, float]], weights: Mapping[str, float]) -> float:
     """Weighted mean; weights are renormalised over the sources that are valid now."""
-    pairs = [(value, max(0.0, float(weights.get(entity_id, 1.0)))) for entity_id, value in values]
-    total = sum(weight for _, weight in pairs)
-    if total <= 0:
-        # Every valid source has weight 0: fall back to a plain mean rather than failing.
-        return statistics.fmean(value for value, _ in pairs)
-    return sum(value * weight for value, weight in pairs) / total
+    shares = effective_weights(values, weights)
+    return math.fsum(value * shares[entity_id] for entity_id, value in values)

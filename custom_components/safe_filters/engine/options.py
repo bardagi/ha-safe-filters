@@ -20,6 +20,10 @@ CONF_ENTITY_IDS = "entity_ids"
 """The sources of a filter that combines several sensors."""
 CONF_METHOD = "method"
 CONF_WEIGHTS = "weights"
+CONF_MIN_WEIGHT = "min_weight"
+"""Weighted mean: % of the total weight that must be valid."""
+CONF_OFFSET_LEARNING = "offset_learning"
+"""Weighted mean: minutes over which source offsets are learned; 0 = off."""
 
 CONF_MIN_VALUE = "min_value"
 CONF_MAX_VALUE = "max_value"
@@ -42,6 +46,8 @@ CONF_PRECISION = "precision"
 
 DEFAULT_METHOD = CombineMethod.MEDIAN
 DEFAULT_WEIGHT = 1.0
+DEFAULT_MIN_WEIGHT = 0.0  # percent; off
+DEFAULT_OFFSET_LEARNING = 0.0  # minutes; off
 DEFAULT_STALE_AFTER = 0.0  # minutes; off, because many sources only report changes
 DEFAULT_MIN_SOURCES = 1
 DEFAULT_HOLD_TIME = 30.0  # minutes
@@ -53,6 +59,7 @@ DEFAULT_MA_WINDOW = 10.0  # minutes
 DEFAULT_PRECISION = 1
 
 SECONDS_PER_MINUTE = 60.0
+PERCENT = 100.0
 
 
 def is_single(options: Mapping[str, Any]) -> bool:
@@ -77,9 +84,16 @@ def build_config(options: Mapping[str, Any]) -> PipelineConfig:
     )
 
     weights: dict[str, float] = {}
+    min_weight_share = 0.0
+    offset_time_constant_s: float | None = None
     if method is CombineMethod.WEIGHTED_MEAN:
         saved = options.get(CONF_WEIGHTS) or {}
         weights = {entity_id: float(saved.get(entity_id, DEFAULT_WEIGHT)) for entity_id in sources}
+        min_weight_pct = float(options.get(CONF_MIN_WEIGHT, DEFAULT_MIN_WEIGHT) or 0)
+        min_weight_share = min(max(min_weight_pct, 0.0), PERCENT) / PERCENT
+        learning_min = float(options.get(CONF_OFFSET_LEARNING, DEFAULT_OFFSET_LEARNING) or 0)
+        if learning_min > 0:
+            offset_time_constant_s = learning_min * SECONDS_PER_MINUTE
 
     stale_after_min = float(options.get(CONF_STALE_AFTER, DEFAULT_STALE_AFTER) or 0)
     validation = ValidationConfig(
@@ -108,6 +122,8 @@ def build_config(options: Mapping[str, Any]) -> PipelineConfig:
         weights=weights,
         validation=validation,
         min_sources=max(1, int(options.get(CONF_MIN_SOURCES, DEFAULT_MIN_SOURCES))),
+        min_weight_share=min_weight_share,
+        offset_time_constant_s=offset_time_constant_s,
         hold_time_s=max(0.0, float(options.get(CONF_HOLD_TIME, DEFAULT_HOLD_TIME)))
         * SECONDS_PER_MINUTE,
         outlier=None

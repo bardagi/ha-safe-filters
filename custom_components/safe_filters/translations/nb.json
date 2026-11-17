@@ -36,6 +36,14 @@
       "weights": {
         "title": "Vekting",
         "description": "Gi hver kilde en relativ vekt. En kilde med vekt 2 teller dobbelt så mye som en med vekt 1. Vektene normaliseres over kildene som er gyldige til enhver tid.\n\n{sources}",
+        "data": {
+          "min_weight": "Minste gyldige vekt",
+          "offset_learning": "Læringstid for avvik"
+        },
+        "data_description": {
+          "min_weight": "De gyldige kildene må til sammen ha minst denne andelen av den totale vekten for å beregne en ny verdi. Med vektene 5, 3 og 2 og 50 % er den første kilden alene eller de to andre sammen nok, men den siste alene er ikke det. Gjelder i tillegg til Minste antall gyldige kilder. 0 slår det av.",
+          "offset_learning": "Mens alle kildene er gyldige, lær hvor langt hver av dem vanligvis ligger fra den kombinerte verdien, og korriger for det når en faller ut, så verdien ikke hopper. Dette styrer hvor raskt de lærte avvikene følger endringer; 60 min er et godt utgangspunkt. 0 slår det av."
+        },
         "sections": {
           "weights": {
             "name": "Vekt per kilde"
@@ -153,6 +161,14 @@
       "weights": {
         "title": "Vekting",
         "description": "Gi hver kilde en relativ vekt. En kilde med vekt 2 teller dobbelt så mye som en med vekt 1. Vektene normaliseres over kildene som er gyldige til enhver tid.\n\n{sources}",
+        "data": {
+          "min_weight": "Minste gyldige vekt",
+          "offset_learning": "Læringstid for avvik"
+        },
+        "data_description": {
+          "min_weight": "De gyldige kildene må til sammen ha minst denne andelen av den totale vekten for å beregne en ny verdi. Med vektene 5, 3 og 2 og 50 % er den første kilden alene eller de to andre sammen nok, men den siste alene er ikke det. Gjelder i tillegg til Minste antall gyldige kilder. 0 slår det av.",
+          "offset_learning": "Mens alle kildene er gyldige, lær hvor langt hver av dem vanligvis ligger fra den kombinerte verdien, og korriger for det når en faller ut, så verdien ikke hopper. Dette styrer hvor raskt de lærte avvikene følger endringer; 60 min er et godt utgangspunkt. 0 slår det av."
+        },
         "sections": {
           "weights": {
             "name": "Vekt per kilde"

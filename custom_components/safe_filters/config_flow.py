@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from homeassistant.components.input_number import DOMAIN as INPUT_NUMBER_DOMAIN
 from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.const import ATTR_FRIENDLY_NAME, ATTR_UNIT_OF_MEASUREMENT
+from homeassistant.const import ATTR_FRIENDLY_NAME, ATTR_UNIT_OF_MEASUREMENT, PERCENTAGE
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 from homeassistant.helpers.schema_config_entry_flow import (
@@ -34,8 +34,10 @@ from .const import (
     CONF_METHOD,
     CONF_MIN_SOURCES,
     CONF_MIN_VALUE,
+    CONF_MIN_WEIGHT,
     CONF_MOVING_AVERAGE,
     CONF_NAME,
+    CONF_OFFSET_LEARNING,
     CONF_OUTLIER,
     CONF_PRECISION,
     CONF_RADIUS,
@@ -50,6 +52,8 @@ from .const import (
     DEFAULT_MAX_RATE,
     DEFAULT_METHOD,
     DEFAULT_MIN_SOURCES,
+    DEFAULT_MIN_WEIGHT,
+    DEFAULT_OFFSET_LEARNING,
     DEFAULT_OUTLIER_RADIUS,
     DEFAULT_OUTLIER_WINDOW,
     DEFAULT_PRECISION,
@@ -226,7 +230,13 @@ async def _weights_schema(handler: SchemaCommonFlowHandler) -> vol.Schema:
                     }
                 ),
                 {"collapsed": False},
-            )
+            ),
+            vol.Required(CONF_MIN_WEIGHT, default=DEFAULT_MIN_WEIGHT): _number(
+                min_value=0, max_value=100, step=1, unit=PERCENTAGE
+            ),
+            vol.Required(CONF_OFFSET_LEARNING, default=DEFAULT_OFFSET_LEARNING): _number(
+                min_value=0, max_value=10080, step=1, unit=UNIT_MINUTES
+            ),
         }
     )
 

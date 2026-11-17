@@ -61,7 +61,14 @@ Every option except this choice can be changed later from the helper's **Configu
 | Source sensor(s) | `sensor`, `number` or `input_number` entities. When combining, drag to reorder; with *Priority*, the first valid one is used. Units are converted automatically when possible (°F → °C, mbar → hPa, …). |
 | Combine method | Combine only: `min`, `max`, `mean`, `median`, `weighted_mean`, `priority` (first valid source). |
 
-With `weighted_mean`, an extra step asks for a weight per source. Weights are renormalised over the sources that are valid at the time.
+With `weighted_mean`, an extra step asks for a weight per source. Weights are relative (50/30/20 is the same as 5/3/2) and are renormalised over the sources that are valid at the time: if the 50 drops out, the 30 and 20 count 60 % and 40 %. The same step has two optional settings:
+
+| Option | Default | Description |
+|---|---|---|
+| Minimum valid weight | 0 % (off) | The valid sources must together carry at least this share of the total weight, otherwise the last value is held (then unavailable). With 50/30/20 and 50 %, the 50 alone or the 30 and 20 together are enough, but the 20 alone is not. Applies in addition to *Minimum valid sources*. |
+| Offset learning time | 0 min (off) | Renormalising removes a dead source's value, but not its influence: if it read 1 °C above the others, the result drops by its share when it goes away. With this on, the helper learns how far each source usually is from the combined value while all sources are valid, and corrects for it when one drops out, so the value doesn't jump. The time sets how quickly the learned offsets follow changes; 60 min is a good start. If a source's real offset changes while it is gone, the value steps by that change when it comes back. |
+
+A source that dies without becoming `unavailable` (common for battery Zigbee and BLE sensors) keeps counting with its last value. Use *Stale after* for such sources if they report regularly.
 
 ### 2. Data quality
 
@@ -99,8 +106,8 @@ Each chart shows one filter on its own, applied to the same noisy example: grey 
 |---|---|
 | `status` | `ok`, `holding` (no valid reading or too few valid sources, showing the last good value) or `restored` (value from before a restart, waiting for fresh data). |
 | `valid_sources` | Number of sources used right now (0 or 1 when filtering one sensor). |
-| `combined_value` | Value before filtering: the combined value, or the source's own value when filtering one sensor. |
-| `sources` | Per source: converted value and status (`ok`, `unavailable`, `non_numeric`, `unit_mismatch`, `out_of_range`, `stale`, `deviation`). |
+| `combined_value` | Value before filtering: the combined value (corrected for missing sources when *Offset learning* is on), or the source's own value when filtering one sensor. |
+| `sources` | Per source: converted value and status (`ok`, `unavailable`, `non_numeric`, `unit_mismatch`, `out_of_range`, `stale`, `deviation`). With `weighted_mean` also `share`: the % of the combined value it makes up right now (0 when not used). With *Offset learning* also `offset`: how far it usually is from the combined value. |
 
 `valid_sources`, `combined_value` and `sources` are excluded from the recorder. To avoid a new state (and recorder row) on every source report, the state is written right away only when the value, `status`, availability or a source's status changes. Changes to `combined_value` and the per-source values alone are written at most once a minute.
 

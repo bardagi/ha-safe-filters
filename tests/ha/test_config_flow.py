@@ -112,18 +112,38 @@ async def test_weighted_flow_asks_for_weights(hass: HomeAssistant) -> None:
     )
     assert result["step_id"] == "weights"
     assert "sensor.temp_a" in _placeholders(result)["sources"]
+    assert {"weights", "min_weight", "offset_learning"} <= _schema_keys(result)
     _assert_serializable(result)
 
     weights = {"sensor.temp_a": 2.0, "sensor.temp_b": 0.0, "sensor.temp_c": 1.0}
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"weights": weights})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"weights": weights, "min_weight": 50.0, "offset_learning": 60.0}
+    )
     assert result["step_id"] == "quality"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], QUALITY_INPUT)
     result = await hass.config_entries.flow.async_configure(result["flow_id"], FILTERS_INPUT)
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["options"]["weights"] == weights
+    assert result["options"]["min_weight"] == 50.0
+    assert result["options"]["offset_learning"] == 60.0
     # (2*10 + 0*12 + 1*11) / 3
     assert get_state(hass).state == "10.3"
+
+
+async def test_weighted_extras_default_off(hass: HomeAssistant) -> None:
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"name": "Outdoor", "entity_ids": SOURCES, "method": "weighted_mean"},
+    )
+    weights = {entity_id: 1.0 for entity_id in SOURCES}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"weights": weights})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], QUALITY_INPUT)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], FILTERS_INPUT)
+    await hass.async_block_till_done()
+    assert result["options"]["min_weight"] == 0.0
+    assert result["options"]["offset_learning"] == 0.0
 
 
 async def test_incompatible_units(hass: HomeAssistant) -> None:

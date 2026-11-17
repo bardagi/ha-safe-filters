@@ -63,6 +63,7 @@ _LOGGER = logging.getLogger(__name__)
 # Sources whose value is set by a person, not reported by a device: never "stale".
 _NO_STALE_CHECK_DOMAINS = {INPUT_NUMBER_DOMAIN, NUMBER_DOMAIN}
 _ATTRIBUTE_DIGITS = 4
+_SHARE_DIGITS = 1
 _RESTORE_UNIT = "native_unit_of_measurement"
 _RESTORE_DEVICE_CLASS = "device_class"
 _RESTORE_PIPELINE = "pipeline"
@@ -260,11 +261,7 @@ class SafeFilterSensor(RestoreSensor):
             ATTR_VALID_SOURCES: result.valid_count,
             ATTR_COMBINED_VALUE: _rounded(result.combined),
             ATTR_SOURCES: {
-                source.entity_id: {
-                    "value": _rounded(source.value),
-                    "status": source.status.value,
-                }
-                for source in result.sources
+                source.entity_id: _source_attributes(source, result) for source in result.sources
             },
         }
         primary = (
@@ -283,6 +280,20 @@ class SafeFilterSensor(RestoreSensor):
         self._last_attributes = self._attr_extra_state_attributes
         if self._can_write:
             self.async_write_ha_state()
+
+
+def _source_attributes(source: SourceReading, result: PipelineResult) -> dict[str, Any]:
+    """One source's entry in the ``sources`` attribute."""
+    attributes: dict[str, Any] = {
+        "value": _rounded(source.value),
+        "status": source.status.value,
+    }
+    if (share := result.shares.get(source.entity_id)) is not None:
+        # Percent of the combined value this source makes up right now.
+        attributes["share"] = round(share * 100, _SHARE_DIGITS)
+    if (offset := result.offsets.get(source.entity_id)) is not None:
+        attributes["offset"] = _rounded(offset)
+    return attributes
 
 
 def _rounded(value: float | None) -> float | None:

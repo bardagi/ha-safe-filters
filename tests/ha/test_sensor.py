@@ -90,6 +90,43 @@ async def test_follows_source_changes_and_skips_unavailable(hass: HomeAssistant)
     assert get_state(hass).state == "9.0"
 
 
+async def test_weighted_shares_and_offsets(hass: HomeAssistant) -> None:
+    """50/30/20: the shares move to 60/40 and the value doesn't jump when A drops out."""
+    for entity_id, value in zip(SOURCES, (22.0, 21.0, 19.0), strict=True):
+        set_temp(hass, entity_id, value)
+    await setup_entry(
+        hass,
+        method="weighted_mean",
+        weights={"sensor.temp_a": 50.0, "sensor.temp_b": 30.0, "sensor.temp_c": 20.0},
+        min_weight=50.0,
+        offset_learning=60.0,
+    )
+    state = get_state(hass)
+    assert state.state == "21.1"
+    assert state.attributes["sources"]["sensor.temp_a"] == {
+        "value": 22.0,
+        "status": "ok",
+        "share": 50.0,
+        "offset": 0.9,
+    }
+
+    hass.states.async_set("sensor.temp_a", STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+    state = get_state(hass)
+    assert state.state == "21.1"
+    sources = state.attributes["sources"]
+    assert sources["sensor.temp_a"]["share"] == 0.0
+    assert sources["sensor.temp_b"]["share"] == 60.0
+    assert sources["sensor.temp_c"]["share"] == 40.0
+
+    # The 20 % source alone is below the 50 % minimum: hold the last value.
+    hass.states.async_set("sensor.temp_b", STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+    state = get_state(hass)
+    assert state.state == "21.1"
+    assert state.attributes["status"] == "holding"
+
+
 async def test_out_of_range_and_non_numeric(hass: HomeAssistant) -> None:
     set_temp(hass, "sensor.temp_a", -999)
     set_temp(hass, "sensor.temp_b", "garbage")
