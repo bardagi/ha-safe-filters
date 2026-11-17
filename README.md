@@ -113,30 +113,101 @@ Each chart shows one filter on its own, applied to the same noisy example: grey 
 
 The sensor has `state_class: measurement` (`total` for energy, gas, water and monetary sources, which Home Assistant doesn't allow as `measurement`), so long-term statistics work. For values like "min/max last 24 h" or "change last hour", add a built-in **Statistics** helper on top of the safe filter.
 
-## Recipes
+## Recommended setups
 
-These are starting points. Adjust them to how often your sensors report.
+These are starting points. Adjust them to your sensors and how often they report. A few rules apply to all of them:
 
-**Outdoor temperature from several sensors, some of which get sun**
-- Method `min` (the shaded sensor wins); range -55 to 45 °C; minimum valid sources 2.
-- If the sensors send their value regularly even when it doesn't change: stale after 90 min.
-- Spike rejection: window 5, radius 2.5. Low-pass 5 min. Decimals 1.
-- Use *max deviation* only if all sensors are placed similarly: in strong sun, a correctly shaded sensor can be the odd one out.
+- **Range:** wide enough for real extremes, narrow enough to catch typical glitches like -40 °C on a low battery, or 0.
+- **Stale after:** only for sources that send their value regularly even when it doesn't change. Set it to 2–3 × their longest normal interval. It applies to every source, so it has to suit the slowest one.
+- **Smoothing:** one smoother (low-pass *or* moving average) is usually enough. Keep it short when an automation has to react quickly.
 
-**Outdoor humidity from 3–4 sensors**
-- Method `median`; range 0 to 100 %; max deviation 15; minimum valid sources 2.
-- Moving average 10 min. Decimals 0.
+### Choosing a combine method
 
-**Wind speed from one sensor**
-- **Filter one sensor**; range 0 to 75 m/s; low-pass 3–5 min.
+| Method | Use when | Example |
+|---|---|---|
+| `median` | 3 or more similar sensors, any one of which may be wrong. | Several temperature sensors in one room. |
+| `mean` | 2 similar sensors, or several that are equally good. | Two pressure sensors. |
+| `weighted_mean` | All sources should count, but some are more accurate or better placed. Or a fallback should only step in when the others are gone. | One good sensor and two cheap ones; the average temperature of the whole home. See [Weighted mean examples](#weighted-mean-examples). |
+| `min` | Errors only push the reading up. | Outdoor temperature, when some sensors get sun. |
+| `max` | Errors only push the reading down. | Brightness: shade, dirt and snow only lower it. |
+| `priority` | One source is preferred, and the others measure the same thing the same way, so switching doesn't cause a jump. | A local meter reader with a cloud backup. |
+
+### Indoors
+
+**Several temperature sensors in one room**
+- Method `median` (with only two sensors, `mean`); range 0 to 40 °C.
+- Max deviation 1.5 °C: with three or more sensors, this leaves out one that sits in the sun, above a radiator or by an open window, until it reads normally again.
+- If the sensors send their value regularly even when it doesn't change: stale after 2–3 × that interval.
+- Moving average 10 min (or low-pass 5 min). Decimals 1.
+- If one sensor is better placed than the others, use `weighted_mean` instead (see [Weighted mean examples](#weighted-mean-examples)).
+
+**Bathroom humidity for a fan**
+- **Filter one sensor**; range 0 to 100 %.
+- No spike rejection or rate limit: a shower raises the humidity quickly, and that is what the fan should react to.
+- Low-pass 1 min, or none. Decimals 0.
 
 **A noisy single sensor (e.g. CO₂ or power)**
 - **Filter one sensor**; set a plausible range (e.g. 300 to 5000 ppm).
 - Spike rejection: window 5, radius sized to a believable jump. Low-pass 2–5 min. Decimals 0.
 
-**Air pressure**
-- Method `median` (or `mean` with two sensors); range 930 to 1070 hPa.
-- Spike rejection: window 5, radius 2 hPa. Moving average 15 min. Optional rate limit 0.5 hPa/min.
+### Outdoors
+
+**Temperature from several sensors, some of which get sun**
+- Method `min` (the shaded sensor wins); range -55 to 45 °C; minimum valid sources 2.
+- If the sensors send their value regularly even when it doesn't change: stale after 90 min.
+- Spike rejection: window 5, radius 2.5. Low-pass 5 min. Decimals 1.
+- Use *max deviation* only if all sensors are placed similarly: in strong sun, a correctly shaded sensor can be the odd one out.
+
+**Air pressure from several sensors**
+- Method `median` with three or more sensors, `mean` with two; range 930 to 1070 hPa.
+- All sources must report the same kind of pressure. Weather stations usually report sea-level (relative) pressure. Bare sensor chips such as the BME280 report absolute pressure, which is about 12 hPa lower per 100 m of altitude. For absolute pressure, lower both range limits by the same amount.
+- Max deviation 3 hPa (three or more sensors) leaves out a sensor that reports the other kind, or has failed.
+- Spike rejection: window 5, radius 2 hPa. Moving average 15 min (30 min for sensors outside in the wind). Optional rate limit 0.5 hPa/min. Decimals 1.
+- Pressure is almost the same indoors and out, so any pressure sensor in the house can be a source. Sensors at different heights differ by about 0.12 hPa per metre (0.4 hPa per floor). With `mean` or `median` the value steps by part of that when one drops out. `weighted_mean` with equal weights and offset learning 60 min avoids the step.
+
+**Humidity from 3–4 sensors**
+- Method `median`; range 0 to 100 %; max deviation 15; minimum valid sources 2.
+- Moving average 10 min. Decimals 0.
+
+**Brightness from several sensors**
+- Method `max`: a sensor in shade, behind dirt or under snow reads too low, never too high. Range 0 to 120 000 lx.
+- No spike rejection: sudden changes in light are real.
+- Low-pass 2 min, so blinds don't react to every passing cloud. Decimals 0.
+
+**Wind speed from one sensor**
+- **Filter one sensor**; range 0 to 75 m/s; low-pass 3–5 min.
+
+### Weighted mean examples
+
+Use `weighted_mean` when every source should count, but not equally. `median` treats all sources the same and leaves out the odd one; `priority` uses one source at a time and jumps when it switches. Weights are relative and are shared out among the sources that are valid right now (see [Sources](#1-sources)).
+
+**One accurate sensor and a few cheap ones**
+- Weights 4 / 1 / 1: the accurate sensor makes up 67 % of the value, each cheap one 17 %.
+- Offset learning 60 min. Cheap sensors are often a bit off. Without it, the value jumps to their error when the accurate sensor drops out.
+- Minimum valid weight 0 % to carry on with the cheap sensors alone, or 50 % to hold the last value instead.
+- Leave max deviation off, or set it wide. It compares against the plain median and ignores the weights, so two cheap sensors that agree can outvote the accurate one.
+
+**Average temperature of the whole home, weighted by floor area**
+- One sensor per room, with the room's floor area in m² as its weight, e.g. living room 35, kitchen 15, bedroom 14, office 10, bathroom 6.
+- Offset learning 120 min. The rooms differ on purpose (a cool bedroom, a warm bathroom), so without it the average jumps whenever one room's sensor drops out.
+- Minimum valid weight 50 %: if rooms making up more than half the floor area are missing, hold the last value rather than report an average of what's left.
+- No max deviation: the rooms are supposed to differ.
+- Moving average 15–30 min. Decimals 1. Useful for heat pump curves, ventilation and energy dashboards.
+
+**Room temperature for heating, with the radiator thermostat as a last resort**
+- Room sensors weight 1 each; the radiator thermostat's own temperature sensor weight 0. A source with weight 0 is only used when every source with a weight is invalid.
+- Offset learning 60 min. The thermostat sits by the radiator and usually reads warm; the learned offset corrects for most of that when it has to take over.
+- Minimum valid weight must stay 0 %. The thermostat carries no weight, so any higher value would stop it from taking over.
+- Leave max deviation off: the thermostat reads differently by design, and a source left out for deviation doesn't get its offset learned.
+- The same works outdoors: a temperature sensor from a weather service at weight 0 keeps the value going when your own sensors are down.
+
+### A backup source with `priority`
+
+**Power from a local meter reader, with a cloud integration as backup**
+- Method `priority`, local reader first. Both read the same meter, so switching between them doesn't cause a jump.
+- Range sized to the main fuse, e.g. 0 to 25 000 W; with solar export, a negative lower limit.
+- No filters: the value should follow the meter. Decimals 0. Hold last value for 5 min.
+- Stale after applies to both sources, so set it longer than the cloud integration's update interval, or leave it off.
 
 ## Development
 
