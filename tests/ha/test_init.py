@@ -33,7 +33,7 @@ async def _setup(
 async def test_old_default_stale_after_is_turned_off(hass: HomeAssistant) -> None:
     entry = await _setup(hass, minor_version=1, stale_after=120.0)
     assert entry.state is ConfigEntryState.LOADED
-    assert entry.minor_version == 2
+    assert entry.minor_version == 3
     assert entry.options["stale_after"] == 0.0
 
 
@@ -43,7 +43,7 @@ async def test_chosen_stale_after_is_kept(
 ) -> None:
     entry = await _setup(hass, minor_version=minor_version, stale_after=stale_after)
     assert entry.state is ConfigEntryState.LOADED
-    assert entry.minor_version == 2
+    assert entry.minor_version == 3
     assert entry.options["stale_after"] == stale_after
 
 

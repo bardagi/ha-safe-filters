@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Iterable
-from typing import Any
+import math
+from collections.abc import Iterable, Mapping
+from contextlib import suppress
+from typing import Any, TypeGuard
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.components.sensor.const import (
     DEVICE_CLASS_STATE_CLASSES,
+    DEVICE_CLASS_UNITS,
     NON_NUMERIC_DEVICE_CLASSES,
     UNIT_CONVERTERS,
 )
@@ -20,6 +23,59 @@ from homeassistant.const import (
 )
 from homeassistant.core import State
 from homeassistant.util.unit_conversion import BaseUnitConverter
+
+CONF_MEASUREMENT = "measurement"
+"""Persisted metadata; absence means unresolved, a null unit means unitless."""
+
+
+def measurement_from_states(states: Iterable[State | None]) -> dict[str, Any] | None:
+    """Resolve metadata only after every configured source is known."""
+    states = list(states)
+    if not states or any(not pick_unit_and_device_class([state])[0] for state in states):
+        return None
+    _, unit, device_class = pick_unit_and_device_class(states)
+    return {"unit": unit, "device_class": device_class}
+
+
+def valid_measurement(value: Any) -> TypeGuard[Mapping[str, Any]]:
+    """Distinguish valid persisted metadata from absent or malformed data."""
+    return (
+        isinstance(value, Mapping)
+        and "unit" in value
+        and (value["unit"] is None or isinstance(value["unit"], str))
+        and "device_class" in value
+        and (
+            value["device_class"] is None or numeric_device_class(value["device_class"]) is not None
+        )
+    )
+
+
+def measurement_supported(measurement: Mapping[str, Any]) -> bool:
+    """Check that Home Assistant accepts the selected numeric class and unit."""
+    device_class = measurement["device_class"]
+    return device_class is None or measurement["unit"] in DEVICE_CLASS_UNITS.get(
+        device_class, {measurement["unit"]}
+    )
+
+
+def matches_measurement(state: State | None, measurement: Mapping[str, Any]) -> bool:
+    """Check known source metadata against a helper's fixed measurement."""
+    if state is None:
+        return True
+    source_class = state.attributes.get(ATTR_DEVICE_CLASS)
+    target_class = measurement["device_class"]
+    if source_class is not None and target_class is not None and source_class != target_class:
+        return False
+    return (
+        convert_value(
+            1.0,
+            state.attributes.get(ATTR_UNIT_OF_MEASUREMENT),
+            measurement["unit"],
+            source_class or target_class,
+        )
+        is not None
+    )
+
 
 # Converters whose result depends on *what* is measured (a specific gas, glucose, or
 # a dimensionless ratio): ppm → µg/m³ is only right for the gas it was made for, and
@@ -62,11 +118,22 @@ def convert_value(
 
     A source without a unit is assumed to already be in the output unit.
     """
-    if from_unit == to_unit or from_unit is None or to_unit is None:
+    if not math.isfinite(value) or any(
+        item is not None and not isinstance(item, str)
+        for item in (from_unit, to_unit, device_class)
+    ):
+        return None
+    if from_unit == to_unit or from_unit is None:
         return value
+    if to_unit is None:
+        return None
     if (converter := _find_converter(from_unit, to_unit, device_class)) is None:
         return None
-    return converter.convert(value, from_unit, to_unit)
+    try:
+        converted = converter.convert(value, from_unit, to_unit)
+    except (ArithmeticError, ValueError):
+        return None
+    return converted if math.isfinite(converted) else None
 
 
 def units_compatible(states: Iterable[State | None]) -> bool:
@@ -100,8 +167,11 @@ def pick_unit_and_device_class(
         if state is None:
             continue
         state_unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
-        if state_unit is not None or state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        if state_unit is not None:
             known = True
+        elif state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            with suppress(ValueError):
+                known = known or math.isfinite(float(state.state))
         if unit is None:
             unit = state_unit
         if (device_class := state.attributes.get(ATTR_DEVICE_CLASS)) is not None:

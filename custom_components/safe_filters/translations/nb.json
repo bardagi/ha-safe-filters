@@ -11,18 +11,31 @@
       },
       "single": {
         "title": "Filtrer én sensor",
-        "description": "Gjør én sensor om til en pålitelig, utjevnet verdi. Målinger som er utilgjengelige, utdaterte eller utenfor gyldig område, ignoreres, og siste gode verdi beholdes en stund i stedet.",
+        "description": "Gjør én sensor om til en pålitelig, utjevnet verdi. Målinger som er utilgjengelige, utdaterte eller utenfor gyldig område, ignoreres, og siste gode verdi beholdes en stund i stedet.\n\nLagret utgang: {unit}; enhetsklasse: {device_class}. For en ny hjelper hentes dette fra kildene med mindre du velger det under Avanserte måleinnstillinger. Det lagrede valget beholdes når kildene omorganiseres.",
         "data": {
           "name": "Navn",
           "entity_id": "Kildesensor"
         },
         "data_description": {
           "entity_id": "Sensoren som skal filtreres."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avanserte måleinnstillinger",
+            "data": {
+              "unit": "Utgangsenhet",
+              "device_class": "Enhetsklasse"
+            },
+            "data_description": {
+              "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+            }
+          }
         }
       },
       "combine": {
         "title": "Kombiner flere sensorer",
-        "description": "Kombiner flere sensorer til én pålitelig verdi. Kilder som er utilgjengelige, har sluttet å rapportere, er utenfor gyldig område eller avviker fra de andre, utelates automatisk.",
+        "description": "Kombiner flere sensorer til én pålitelig verdi. Kilder som er utilgjengelige, har sluttet å rapportere, er utenfor gyldig område eller avviker fra de andre, utelates automatisk.\n\nLagret utgang: {unit}; enhetsklasse: {device_class}. For en ny hjelper hentes dette fra kildene med mindre du velger det under Avanserte måleinnstillinger. Det lagrede valget beholdes når kildene omorganiseres.",
         "data": {
           "name": "Navn",
           "entity_ids": "Kildesensorer",
@@ -31,6 +44,19 @@
         "data_description": {
           "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren.",
           "method": "Hvordan de gyldige kildene kombineres til én verdi."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avanserte måleinnstillinger",
+            "data": {
+              "unit": "Utgangsenhet",
+              "device_class": "Enhetsklasse"
+            },
+            "data_description": {
+              "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+            }
+          }
         }
       },
       "weights": {
@@ -141,24 +167,43 @@
       "incompatible_units": "De valgte sensorene har enheter som ikke kan konverteres til hverandre.",
       "min_not_below_max": "Laveste plausible verdi må være lavere enn høyeste.",
       "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer.",
-      "max_rate_not_positive": "Maks endring per minutt må være større enn 0."
+      "max_rate_not_positive": "Maks endring per minutt må være større enn 0.",
+      "dependency_cycle": "Disse kildene lager en sirkel mellom Safe Filters-hjelpere. Velg kilder som ikke avhenger av denne hjelperen.",
+      "source_metadata_unknown": "Vent til kildene er lastet inn, eller angi utgangsenhet og enhetsklasse under Avanserte måleinnstillinger.",
+      "incompatible_measurement": "Kildene passer ikke med den valgte utgangsmålingen. Kontroller kildeenhetene og Avanserte måleinnstillinger.",
+      "non_finite_number": "Skriv inn et endelig tall.",
+      "invalid_device_class": "Velg en enhetsklasse for numeriske sensorer.",
+      "invalid_measurement_unit": "Utgangsenheten er ikke gyldig for denne enhetsklassen. Bruk riktig enhetssymbol, for eksempel °C for temperatur eller W for effekt."
     }
   },
   "options": {
     "step": {
       "single": {
         "title": "Kilde",
-        "description": "Endre sensoren som skal filtreres.",
+        "description": "Endre sensoren som skal filtreres.\n\nLagret utgang: {unit}; enhetsklasse: {device_class}. For en ny hjelper hentes dette fra kildene med mindre du velger det under Avanserte måleinnstillinger. Det lagrede valget beholdes når kildene omorganiseres.",
         "data": {
           "entity_id": "Kildesensor"
         },
         "data_description": {
           "entity_id": "Sensoren som skal filtreres."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avanserte måleinnstillinger",
+            "data": {
+              "unit": "Utgangsenhet",
+              "device_class": "Enhetsklasse"
+            },
+            "data_description": {
+              "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+            }
+          }
         }
       },
       "combine": {
         "title": "Kilder",
-        "description": "Endre sensorene og hvordan de kombineres.",
+        "description": "Endre sensorene og hvordan de kombineres.\n\nLagret utgang: {unit}; enhetsklasse: {device_class}. For en ny hjelper hentes dette fra kildene med mindre du velger det under Avanserte måleinnstillinger. Det lagrede valget beholdes når kildene omorganiseres.",
         "data": {
           "entity_ids": "Kildesensorer",
           "method": "Kombineringsmetode"
@@ -166,6 +211,19 @@
         "data_description": {
           "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren.",
           "method": "Hvordan de gyldige kildene kombineres til én verdi."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avanserte måleinnstillinger",
+            "data": {
+              "unit": "Utgangsenhet",
+              "device_class": "Enhetsklasse"
+            },
+            "data_description": {
+              "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+            }
+          }
         }
       },
       "weights": {
@@ -276,7 +334,13 @@
       "incompatible_units": "De valgte sensorene har enheter som ikke kan konverteres til hverandre.",
       "min_not_below_max": "Laveste plausible verdi må være lavere enn høyeste.",
       "min_sources_too_high": "Minste antall gyldige kilder kan ikke være høyere enn antall valgte sensorer.",
-      "max_rate_not_positive": "Maks endring per minutt må være større enn 0."
+      "max_rate_not_positive": "Maks endring per minutt må være større enn 0.",
+      "dependency_cycle": "Disse kildene lager en sirkel mellom Safe Filters-hjelpere. Velg kilder som ikke avhenger av denne hjelperen.",
+      "source_metadata_unknown": "Vent til kildene er lastet inn, eller angi utgangsenhet og enhetsklasse under Avanserte måleinnstillinger.",
+      "incompatible_measurement": "Kildene passer ikke med den valgte utgangsmålingen. Kontroller kildeenhetene og Avanserte måleinnstillinger.",
+      "non_finite_number": "Skriv inn et endelig tall.",
+      "invalid_device_class": "Velg en enhetsklasse for numeriske sensorer.",
+      "invalid_measurement_unit": "Utgangsenheten er ikke gyldig for denne enhetsklassen. Bruk riktig enhetssymbol, for eksempel °C for temperatur eller W for effekt."
     }
   },
   "selector": {
@@ -288,6 +352,70 @@
         "median": "Median",
         "weighted_mean": "Vektet gjennomsnitt",
         "priority": "Prioritet (første gyldige kilde)"
+      }
+    },
+    "output_device_class": {
+      "options": {
+        "auto": "Automatisk (fra kildene)",
+        "none": "Ingen",
+        "absolute_humidity": "absolute_humidity",
+        "apparent_power": "Tilsynelatende effekt",
+        "aqi": "Luftkvalitetsindeks",
+        "area": "area",
+        "atmospheric_pressure": "Atmosfærisk trykk",
+        "battery": "Batteri",
+        "blood_glucose_concentration": "blood_glucose_concentration",
+        "carbon_monoxide": "Karbonmonoksid",
+        "carbon_dioxide": "Karbondioksid",
+        "conductivity": "conductivity",
+        "current": "Strøm",
+        "data_rate": "Datahastighet",
+        "data_size": "Datastørrelse",
+        "distance": "Avstand",
+        "duration": "Varighet",
+        "energy": "Energi",
+        "energy_distance": "energy_distance",
+        "energy_storage": "Lagret energi",
+        "frequency": "Frekvens",
+        "gas": "Gass",
+        "humidity": "Luftfuktighet",
+        "illuminance": "Belysningsstyrke",
+        "irradiance": "Innstråling",
+        "moisture": "Fuktighet",
+        "monetary": "monetary",
+        "nitrogen_dioxide": "Nitrogendioksid",
+        "nitrogen_monoxide": "Nitrogenmonoksid",
+        "nitrous_oxide": "Nitrogenoksid",
+        "ozone": "Ozon",
+        "ph": "pH",
+        "pm1": "Svevestøv 1 μm",
+        "pm10": "Svevestøv 10 μm",
+        "pm25": "Svevestøv 2,5 μm",
+        "pm4": "pm4",
+        "power_factor": "Effekt faktor",
+        "power": "Effekt",
+        "precipitation": "Nedbør",
+        "precipitation_intensity": "Nedbørsintensitet",
+        "pressure": "Trykk",
+        "radon": "radon",
+        "reactive_energy": "reactive_energy",
+        "reactive_power": "Reaktiv effekt",
+        "signal_strength": "Signalstyrke",
+        "sound_pressure": "Lydtrykk",
+        "speed": "Hastighet",
+        "sulphur_dioxide": "Svoveldioksid",
+        "temperature": "Temperatur",
+        "temperature_delta": "temperature_delta",
+        "volatile_organic_compounds": "volatile_organic_compounds",
+        "volatile_organic_compounds_parts": "volatile_organic_compounds_parts",
+        "voltage": "Spenning",
+        "volume": "Volum",
+        "volume_storage": "Lagret volum",
+        "volume_flow_rate": "volume_flow_rate",
+        "water": "Vann",
+        "weight": "Vekt",
+        "wind_direction": "wind_direction",
+        "wind_speed": "Vindstyrke"
       }
     }
   }

@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import itertools
 import math
-import statistics
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Mapping
 from typing import Any, ClassVar
+
+from .numeric import blend, finite, median, optional_finite, weighted_average
 
 
 class Stage(ABC):
@@ -54,6 +55,7 @@ class OutlierStage(Stage):
         self.radius = float(radius)
         self._window: deque[float] = deque(maxlen=self.window_size)
         self._output: float | None = None
+        self.accepted = True
 
     def process(self, value: float, now: float, new_sample: bool) -> float:
         if not new_sample:
@@ -61,25 +63,35 @@ class OutlierStage(Stage):
         min_samples = min(self.MIN_SAMPLES, self.window_size)
         is_outlier = (
             len(self._window) >= min_samples
-            and abs(value - statistics.median(self._window)) > self.radius
+            and abs(value - median(list(self._window))) > self.radius
         )
         if not is_outlier or self._output is None:
             self._output = value
+            self.accepted = True
+        else:
+            self.accepted = False
         self._window.append(value)
         return self._output
 
     def reset(self) -> None:
         self._window.clear()
         self._output = None
+        self.accepted = True
 
     def dump(self) -> dict[str, Any]:
-        return {"window": list(self._window), "output": self._output}
+        return {"window": list(self._window), "output": self._output, "accepted": self.accepted}
 
     def load(self, data: Mapping[str, Any]) -> None:
-        window = [float(v) for v in data["window"]]
-        output = data["output"]
+        if not isinstance(data["window"], list):
+            raise ValueError("invalid outlier window")
+        window = [finite(v) for v in data["window"]]
+        output = optional_finite(data["output"])
+        accepted = data.get("accepted", True)
+        if not isinstance(accepted, bool) or bool(window) != (output is not None):
+            raise ValueError("inconsistent outlier state")
         self._window = deque(window, maxlen=self.window_size)
-        self._output = None if output is None else float(output)
+        self._output = output
+        self.accepted = accepted
 
 
 class RateLimitStage(Stage):
@@ -97,9 +109,11 @@ class RateLimitStage(Stage):
             self._output, self._time = value, now
             return value
         # A clock that went backwards gives dt = 0 for this step only.
-        max_step = self.max_rate_per_min * max(0.0, now - self._time) / 60.0
+        max_step = finite(self.max_rate_per_min * (max(0.0, now - self._time) / 60.0))
         delta = min(max(value - self._output, -max_step), max_step)
-        self._output = value if abs(value - self._output) <= max_step else self._output + delta
+        self._output = finite(
+            value if abs(value - self._output) <= max_step else self._output + delta
+        )
         self._time = now
         return self._output
 
@@ -112,8 +126,10 @@ class RateLimitStage(Stage):
 
     def load(self, data: Mapping[str, Any]) -> None:
         output, time = data["output"], data["time"]
-        self._output = None if output is None else float(output)
-        self._time = None if time is None else float(time)
+        if (output is None) != (time is None):
+            raise ValueError("inconsistent rate limit state")
+        self._output = optional_finite(output)
+        self._time = optional_finite(time)
 
 
 class LowPassStage(Stage):
@@ -147,8 +163,7 @@ class LowPassStage(Stage):
             return value
         # A clock that went backwards gives dt = 0 for this step only.
         dt = max(0.0, now - self._time)
-        decay = math.exp(-dt / self.time_constant_s)
-        self._output = self._input + (self._output - self._input) * decay
+        self._output = blend(self._output, self._input, -math.expm1(-dt / self.time_constant_s))
         self._input = value
         self._time = now
         return self._output
@@ -165,9 +180,11 @@ class LowPassStage(Stage):
         output, time = data["output"], data["time"]
         # State saved before "input" existed: assume the output had settled.
         value_in = data.get("input", output)
-        self._output = None if output is None else float(output)
-        self._input = None if value_in is None else float(value_in)
-        self._time = None if time is None else float(time)
+        if (output is None) != (time is None) or (output is None) != (value_in is None):
+            raise ValueError("inconsistent low-pass state")
+        self._output = optional_finite(output)
+        self._input = optional_finite(value_in)
+        self._time = optional_finite(time)
 
 
 class EmaStage(Stage):
@@ -188,7 +205,7 @@ class EmaStage(Stage):
         if self._output is None:
             self._output = value
         elif new_sample:
-            self._output += self.alpha * (value - self._output)
+            self._output = blend(self._output, value, self.alpha)
         return self._output
 
     def reset(self) -> None:
@@ -199,7 +216,7 @@ class EmaStage(Stage):
 
     def load(self, data: Mapping[str, Any]) -> None:
         output = data["output"]
-        self._output = None if output is None else float(output)
+        self._output = optional_finite(output)
 
 
 class MovingAverageStage(Stage):
@@ -240,13 +257,15 @@ class MovingAverageStage(Stage):
         span = now - start
         if span <= 0:
             return samples[-1][1]
-        area = 0.0
+        values = []
+        durations = []
         for index, (time, sample) in enumerate(samples):
             seg_start = max(time, start)
             seg_end = samples[index + 1][0] if index + 1 < len(samples) else now
             if seg_end > seg_start:
-                area += sample * (seg_end - seg_start)
-        return area / span
+                values.append(sample)
+                durations.append(seg_end - seg_start)
+        return weighted_average(values, durations)
 
     def reset(self) -> None:
         self._samples.clear()
@@ -255,7 +274,9 @@ class MovingAverageStage(Stage):
         return {"samples": [[time, value] for time, value in self._samples]}
 
     def load(self, data: Mapping[str, Any]) -> None:
-        samples = [(float(time), float(value)) for time, value in data["samples"]]
+        if not isinstance(data["samples"], list):
+            raise ValueError("invalid moving average samples")
+        samples = [(finite(time), finite(value)) for time, value in data["samples"]]
         if any(b[0] < a[0] for a, b in itertools.pairwise(samples)):
             raise ValueError("moving average samples are not in time order")
         self._samples = samples

@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .combine import effective_weights, weight_of
+from .numeric import blend, finite, weighted_average
 
 
 class OffsetLearner:
@@ -40,7 +41,9 @@ class OffsetLearner:
     def combine(self, values: Sequence[tuple[str, float]], now: float) -> float:
         """Combine the valid ``(entity_id, value)`` pairs, learning when all are valid."""
         shares = effective_weights(values, self.weights)
-        mean = math.fsum(value * shares[entity_id] for entity_id, value in values)
+        mean = weighted_average(
+            [value for _, value in values], [shares[entity_id] for entity_id, _ in values]
+        )
         dt = self._advance(now)
 
         if self._weighted and self._weighted <= {entity_id for entity_id, _ in values}:
@@ -52,8 +55,9 @@ class OffsetLearner:
             entity_id not in offsets for entity_id, _ in values if shares[entity_id] > 0
         ):
             return mean
-        return math.fsum(
-            (value - offsets.get(entity_id, 0.0)) * shares[entity_id] for entity_id, value in values
+        return weighted_average(
+            [finite(value - offsets.get(entity_id, 0.0)) for entity_id, value in values],
+            [shares[entity_id] for entity_id, _ in values],
         )
 
     def advance(self, now: float) -> None:
@@ -70,7 +74,7 @@ class OffsetLearner:
         return dt
 
     def _learn(self, values: Sequence[tuple[str, float]], mean: float, dt: float | None) -> None:
-        targets = {entity_id: value - mean for entity_id, value in values}
+        targets = {entity_id: finite(value - mean) for entity_id, value in values}
         if self._offsets is None:
             self._offsets = targets
             return
@@ -83,7 +87,7 @@ class OffsetLearner:
             alpha = 1.0 - math.exp(-dt / self.time_constant_s)
         for entity_id, target in targets.items():
             old = self._offsets.get(entity_id)
-            self._offsets[entity_id] = target if old is None else old + alpha * (target - old)
+            self._offsets[entity_id] = target if old is None else blend(old, target, alpha)
 
     def reset(self) -> None:
         """Forget the learned offsets."""
@@ -99,7 +103,10 @@ class OffsetLearner:
 
         The time is not restored, so time spent stopped doesn't count as learning.
         """
-        self._offsets = (
-            None if data is None else {str(key): float(value) for key, value in data.items()}
-        )
+        if data is not None and not isinstance(data, Mapping):
+            raise ValueError("invalid offsets")
+        offsets = None if data is None else {str(key): finite(value) for key, value in data.items()}
+        if offsets is not None and not self._weighted <= offsets.keys():
+            raise ValueError("missing source offsets")
+        self._offsets = offsets
         self._time = None

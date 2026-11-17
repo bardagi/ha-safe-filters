@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -32,6 +33,8 @@ from homeassistant.core import (
     callback,
     split_entity_id,
 )
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -48,6 +51,7 @@ from .const import (
     ATTR_VALID_SOURCES,
     TICK_INTERVAL,
 )
+from .dependencies import has_dependency_cycle
 from .engine import (
     Pipeline,
     PipelineResult,
@@ -57,10 +61,13 @@ from .engine import (
     build_config,
 )
 from .units import (
+    CONF_MEASUREMENT,
     convert_value,
+    matches_measurement,
+    measurement_from_states,
     numeric_device_class,
-    pick_unit_and_device_class,
     state_class_for,
+    valid_measurement,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,6 +79,7 @@ _SHARE_DIGITS = 1
 _RESTORE_UNIT = "native_unit_of_measurement"
 _RESTORE_DEVICE_CLASS = "device_class"
 _RESTORE_PIPELINE = "pipeline"
+_RESTORE_MEASUREMENT_KNOWN = "measurement_known"
 
 
 async def async_setup_entry(
@@ -89,12 +97,14 @@ class SafeFilterExtraStoredData(SensorExtraStoredData):
 
     device_class: str | None
     pipeline: dict[str, Any] | None
+    measurement_known: bool = True
 
     def as_dict(self) -> dict[str, Any]:
         """Return a dict representation of the stored data."""
         data = super().as_dict()
         data[_RESTORE_DEVICE_CLASS] = self.device_class
         data[_RESTORE_PIPELINE] = self.pipeline
+        data[_RESTORE_MEASUREMENT_KNOWN] = self.measurement_known
         return data
 
 
@@ -107,6 +117,7 @@ class SafeFilterSensor(RestoreSensor):
 
     def __init__(self, entry: ConfigEntry) -> None:
         """Initialise the sensor."""
+        self._entry = entry
         self._config = build_config(entry.options)
         self._pipeline = Pipeline(self._config)
         self._source_ids = list(self._config.sources)
@@ -124,6 +135,9 @@ class SafeFilterSensor(RestoreSensor):
         self._started = False
         self._can_write = False
         self._unit_pinned = False
+        measurement = entry.options.get(CONF_MEASUREMENT)
+        if valid_measurement(measurement):
+            self._set_unit(measurement["unit"], numeric_device_class(measurement["device_class"]))
         self._last_primary: tuple[Any, ...] | None = None
         self._last_attributes: dict[str, Any] | None = None
 
@@ -131,9 +145,10 @@ class SafeFilterSensor(RestoreSensor):
         """Restore state and start listening to the sources."""
         await super().async_added_to_hass()
 
-        if self.entity_id in self._source_ids:
-            _LOGGER.warning("%s cannot use itself as a source; ignoring it", self.entity_id)
-            self._source_ids.remove(self.entity_id)
+        if self.entity_id in self._source_ids or has_dependency_cycle(
+            self.hass, self._entry.entry_id, self._source_ids
+        ):
+            raise HomeAssistantError("Safe Filters sources contain a dependency cycle")
 
         await self._async_restore()
 
@@ -158,31 +173,82 @@ class SafeFilterSensor(RestoreSensor):
             self.native_unit_of_measurement,
             self.device_class,
             self._pipeline.dump(),
+            self._unit_pinned,
         )
 
     async def _async_restore(self) -> None:
         last = await self.async_get_last_extra_data()
-        data = last.as_dict() if last is not None else {}
+        raw = last.as_dict() if last is not None else {}
+        data = raw if isinstance(raw, Mapping) else {}
         restored_unit = data.get(_RESTORE_UNIT)
 
-        known, unit, device_class = pick_unit_and_device_class(self._source_states())
-        if known:
-            self._set_unit(unit, device_class)
-            self._unit_pinned = True
+        measurement = self._entry.options.get(CONF_MEASUREMENT)
+        if not valid_measurement(measurement):
+            restored_measurement = {
+                "unit": restored_unit,
+                "device_class": data.get(_RESTORE_DEVICE_CLASS),
+            }
+            # A null unit is meaningful only if it was actually saved.
+            restored_known = (
+                data.get(
+                    _RESTORE_MEASUREMENT_KNOWN,
+                    restored_unit is not None
+                    or data.get(_RESTORE_DEVICE_CLASS) is not None
+                    or data.get("native_value") is not None,
+                )
+                is True
+            )
+            measurement = (
+                restored_measurement
+                if restored_known
+                and _RESTORE_UNIT in data
+                and valid_measurement(restored_measurement)
+                else measurement_from_states(self._source_states())
+            )
+        if measurement is not None and valid_measurement(measurement):
+            self._pin_measurement(measurement)
         else:
-            restored_device_class = numeric_device_class(data.get(_RESTORE_DEVICE_CLASS))
-            self._set_unit(restored_unit, restored_device_class)
-            # Without anything restored, pick the unit once the sources are known.
-            self._unit_pinned = restored_unit is not None or restored_device_class is not None
+            self._set_unit(None, None)
 
-        if restored_unit != self._attr_native_unit_of_measurement:
+        if (
+            not self._unit_pinned
+            or restored_unit != self._attr_native_unit_of_measurement
+            or numeric_device_class(data.get(_RESTORE_DEVICE_CLASS)) != self._attr_device_class
+        ):
             return
         now = dt_util.utcnow().timestamp()
         if self._pipeline.restore(data.get(_RESTORE_PIPELINE), now):
             self._apply(self._pipeline.evaluate([], now, new_sample=False), flush_details=True)
 
+    def _pin_measurement(self, measurement: Mapping[str, Any]) -> None:
+        self._set_unit(measurement["unit"], numeric_device_class(measurement["device_class"]))
+        self._unit_pinned = True
+        if self.registry_entry is not None:
+            options = dict(self.registry_entry.options.get("sensor.private", {}))
+            if options.get("suggested_unit_of_measurement") != measurement["unit"]:
+                if measurement["unit"] is None:
+                    options.pop("suggested_unit_of_measurement", None)
+                else:
+                    options["suggested_unit_of_measurement"] = measurement["unit"]
+                # Keep any explicit per-entity display preference. The suggestion
+                # follows our output unit when the user has not set that override.
+                er.async_get(self.hass).async_update_entity_options(
+                    self.entity_id, "sensor.private", options
+                )
+        if self._entry.options.get(CONF_MEASUREMENT) != measurement:
+            # This sensor has already applied a newly resolved measurement. Only
+            # user edits need a reload; recording this metadata must not loop.
+            self._entry.runtime_data = {
+                **self._entry.runtime_data,
+                CONF_MEASUREMENT: dict(measurement),
+            }
+            self.hass.config_entries.async_update_entry(
+                self._entry, options={**self._entry.options, CONF_MEASUREMENT: dict(measurement)}
+            )
+
     def _set_unit(self, unit: str | None, device_class: SensorDeviceClass | None) -> None:
         self._attr_native_unit_of_measurement = unit
+        self._attr_suggested_unit_of_measurement = unit
         self._attr_device_class = device_class
         self._attr_state_class = state_class_for(device_class)
 
@@ -233,12 +299,15 @@ class SafeFilterSensor(RestoreSensor):
     ) -> None:
         if not self._unit_pinned:
             # Nothing was known at startup; pin unit and device class now.
-            known, unit, device_class = pick_unit_and_device_class(self._source_states())
-            if known:
-                self._set_unit(unit, device_class)
-                self._unit_pinned = True
+            measurement = measurement_from_states(self._source_states())
+            if measurement is not None:
+                self._pin_measurement(measurement)
         now = dt_util.utcnow().timestamp()
-        readings = [self._read_source(entity_id) for entity_id in self._source_ids]
+        readings = (
+            [self._read_source(entity_id) for entity_id in self._source_ids]
+            if self._unit_pinned
+            else []
+        )
         self._apply(self._pipeline.evaluate(readings, now, new_sample, reported_by), flush_details)
 
     def _read_source(self, entity_id: str) -> SourceReading:
@@ -251,6 +320,15 @@ class SafeFilterSensor(RestoreSensor):
             return SourceReading(entity_id, None, status=SourceStatus.NON_NUMERIC)
         if not math.isfinite(value):
             return SourceReading(entity_id, None, status=SourceStatus.NON_NUMERIC)
+
+        if not matches_measurement(
+            state,
+            {
+                "unit": self._attr_native_unit_of_measurement,
+                "device_class": self._attr_device_class,
+            },
+        ):
+            return SourceReading(entity_id, None, status=SourceStatus.UNIT_MISMATCH)
 
         converted = convert_value(
             value,

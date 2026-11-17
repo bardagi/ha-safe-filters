@@ -7,8 +7,11 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
 
 from .const import CONF_STALE_AFTER
+from .dependencies import has_dependency_cycle
+from .engine import source_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,6 +25,9 @@ _OLD_DEFAULT_STALE_AFTER = 120.0
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a Safe Filters helper from a config entry."""
+    if has_dependency_cycle(hass, entry.entry_id, source_ids(entry.options)):
+        raise ConfigEntryError("Safe Filters sources contain a dependency cycle")
+    entry.runtime_data = dict(entry.options)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
@@ -44,11 +50,18 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
 
+    if entry.minor_version < 3:
+        # Measurement metadata is resolved by the sensor, where restore data is
+        # available. Never guess a legacy unit from a partially loaded source set.
+        hass.config_entries.async_update_entry(entry, minor_version=3)
+
     return True
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the entry when its options change."""
+    if entry.runtime_data == dict(entry.options):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
 
 

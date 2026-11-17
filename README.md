@@ -54,6 +54,26 @@ Requires Home Assistant 2025.8 or newer. The integration icon is shipped with th
 
 Every option except this choice can be changed later from the helper's **Configure** button.
 
+The source step shows the saved output unit and device class. Expand **Advanced
+measurement settings** to choose them manually, both during setup and later under
+**Configure**. By default they are inferred from the sources and saved, so source
+reordering and restarts keep the same measurement. Source readings are converted
+into that unit before applying thresholds. A separate display-unit override in
+Home Assistant's entity settings still takes precedence for display.
+
+Changing compatible units (for example °C → °F) converts range limits, deviation
+limits, spike radius and rate limits automatically. Changing the measurement type
+clears incompatible range/deviation limits and disables spike rejection and rate
+limiting; review the following quality and filter steps before saving. A unit or
+device-class change starts fresh filter history. Known source classes must match
+the chosen class; **None** removes the output device class.
+
+If sources have not loaded yet, enter the measurement manually or wait for their
+metadata. Existing helpers use their restored metadata, or wait for all source
+metadata before choosing a unit for the first time.
+Safe Filters helpers can be chained, but sources that create a dependency cycle
+are rejected.
+
 ### 1. Sources
 
 | Option | Description |
@@ -93,6 +113,19 @@ A source that dies without becoming `unavailable` (common for battery Zigbee and
 
 Each smoother (3–5) adds delay. Usually *one* of them is enough.
 
+Rejected spikes do not count as readings for the EMA. While spike rejection is
+rejecting the current reading, the helper reports `holding` and time-based filters
+continue toward the last accepted input. The normal hold limit still applies:
+repeated spikes cannot keep an old output available forever. Rejected samples
+continue to fill the spike window even after expiry, so a sustained real change
+can recover the output without letting the next isolated spike straight through.
+
+Malformed saved state and non-finite calculations are discarded. A separately
+validated output can still be held until its hold limit expires. Future-dated
+restored values are rejected, and a backward clock jump invalidates held timing
+and filter history. Older spike-filter snapshots restore the output value only;
+new snapshots also preserve whether the last sample was rejected.
+
 Each chart shows one filter on its own, applied to the same noisy example: grey is the input, blue the output, red rings are samples ignored by spike rejection. The same charts are shown in the setup dialog.
 
 | 1. Spike rejection | 2. Rate limit |
@@ -107,7 +140,7 @@ Each chart shows one filter on its own, applied to the same noisy example: grey 
 
 | Attribute | Meaning |
 |---|---|
-| `status` | `ok`, `holding` (no valid reading or too few valid sources, showing the last good value) or `restored` (value from before a restart, waiting for fresh data). |
+| `status` | `ok`, `holding` (too few valid sources, a rejected spike or an invalid calculation, showing the last good value) or `restored` (value from before a restart, waiting for fresh data). |
 | `valid_sources` | Number of sources used right now (0 or 1 when filtering one sensor). |
 | `combined_value` | Value before filtering: the combined value (corrected for missing sources when *Offset learning* is on), or the source's own value when filtering one sensor. |
 | `sources` | Per source: converted value and status (`ok`, `unavailable`, `non_numeric`, `unit_mismatch`, `out_of_range`, `stale`, `deviation`). With `weighted_mean` also `share`: the % of the combined value it makes up right now (0 when not used). With *Offset learning* also `offset`: how far it usually is from the combined value. |

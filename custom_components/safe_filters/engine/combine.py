@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
-import statistics
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
+
+from .numeric import average, finite, median, weighted_average
 
 
 class CombineMethod(StrEnum):
@@ -39,9 +40,9 @@ def combine(
         case CombineMethod.MAX:
             return max(numbers)
         case CombineMethod.MEAN:
-            return statistics.fmean(numbers)
+            return average(numbers)
         case CombineMethod.MEDIAN:
-            return statistics.median(numbers)
+            return median(numbers)
         case CombineMethod.PRIORITY:
             return numbers[0]
         case CombineMethod.WEIGHTED_MEAN:
@@ -52,7 +53,7 @@ def combine(
 
 def weight_of(weights: Mapping[str, float], entity_id: str) -> float:
     """The configured weight of a source: missing means 1, negative means 0."""
-    return max(0.0, float(weights.get(entity_id, 1.0)))
+    return max(0.0, finite(weights.get(entity_id, 1.0)))
 
 
 def effective_weights(
@@ -64,7 +65,10 @@ def effective_weights(
     every one of them has weight 0, they share equally rather than failing.
     """
     raw = {entity_id: weight_of(weights, entity_id) for entity_id, _ in values}
-    total = sum(raw.values())
+    scale = max(raw.values(), default=0.0)
+    if scale > 0:
+        raw = {entity_id: weight / scale for entity_id, weight in raw.items()}
+    total = math.fsum(raw.values())
     if total <= 0:
         return {entity_id: 1.0 / len(raw) for entity_id in raw}
     return {entity_id: weight / total for entity_id, weight in raw.items()}
@@ -73,4 +77,6 @@ def effective_weights(
 def _weighted_mean(values: Sequence[tuple[str, float]], weights: Mapping[str, float]) -> float:
     """Weighted mean; weights are renormalised over the sources that are valid now."""
     shares = effective_weights(values, weights)
-    return math.fsum(value * shares[entity_id] for entity_id, value in values)
+    return weighted_average(
+        [value for _, value in values], [shares[entity_id] for entity_id, _ in values]
+    )

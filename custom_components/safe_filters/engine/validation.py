@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import math
-import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
+
+from .numeric import median
 
 
 class SourceStatus(StrEnum):
@@ -87,12 +88,12 @@ def _check_deviation(
     if len(valid) < MIN_SOURCES_FOR_DEVIATION_CHECK:
         # With only two sources there is no way to tell which one is wrong.
         return readings
-    median = statistics.median(valid)
+    center = median(valid)
     return [
         replace(r, status=SourceStatus.DEVIATION)
         if r.status is SourceStatus.OK
         and r.value is not None
-        and abs(r.value - median) > max_deviation
+        and abs(r.value - center) > max_deviation
         else r
         for r in readings
     ]

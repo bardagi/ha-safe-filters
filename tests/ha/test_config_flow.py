@@ -99,6 +99,7 @@ async def test_full_flow(hass: HomeAssistant) -> None:
         "name": "Outdoor",
         "entity_ids": SOURCES,
         "method": "median",
+        "measurement": {"unit": "°C", "device_class": "temperature"},
         **QUALITY_INPUT,
         **FILTERS_INPUT,
     }
@@ -230,7 +231,7 @@ SINGLE_QUALITY_INPUT = {"stale_after": 60.0, "hold_time": 15.0}
 
 async def test_single_flow(hass: HomeAssistant) -> None:
     result = await _start(hass, "single")
-    assert _schema_keys(result) == {"name", "entity_id"}
+    assert _schema_keys(result) == {"name", "entity_id", "advanced"}
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"name": "Outdoor", "entity_id": "sensor.temp_b"}
     )
@@ -251,6 +252,7 @@ async def test_single_flow(hass: HomeAssistant) -> None:
     assert result["options"] == {
         "name": "Outdoor",
         "entity_id": "sensor.temp_b",
+        "measurement": {"unit": "°C", "device_class": "temperature"},
         **SINGLE_QUALITY_INPUT,
         **FILTERS_INPUT,
     }
@@ -273,7 +275,7 @@ async def test_single_options_flow(hass: HomeAssistant) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "single"
-    assert _schema_keys(result) == {"entity_id"}
+    assert _schema_keys(result) == {"entity_id", "advanced"}
     _assert_serializable(result)
 
     result = await hass.config_entries.options.async_configure(
@@ -291,3 +293,29 @@ async def test_single_options_flow(hass: HomeAssistant) -> None:
     assert "entity_ids" not in entry.options
     assert entry.options["name"] == "Outdoor"
     assert get_state(hass).state == "11.0"
+
+
+async def test_sources_wait_for_measurement_metadata(hass: HomeAssistant) -> None:
+    result = await _start(hass, "single")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Missing", "entity_id": "sensor.not_loaded"}
+    )
+    assert result["errors"] == {"base": "source_metadata_unknown"}
+    set_temp(hass, "sensor.not_loaded", 20)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Missing", "entity_id": "sensor.not_loaded"}
+    )
+    assert result["step_id"] == "quality"
+    assert result["description_placeholders"] == {"unit": "°C"}
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+async def test_quality_rejects_nonfinite_numbers(hass: HomeAssistant, value: float) -> None:
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Outdoor", "entity_ids": SOURCES, "method": "median"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**QUALITY_INPUT, "min_value": value}
+    )
+    assert result["errors"] == {"base": "non_finite_number"}

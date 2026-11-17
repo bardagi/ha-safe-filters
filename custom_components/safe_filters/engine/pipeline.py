@@ -11,8 +11,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from .combine import CombineMethod, combine, effective_weights, weight_of
+from .combine import CombineMethod, combine, effective_weights
 from .compensation import OffsetLearner
+from .numeric import finite, optional_finite
 from .stages import (
     EmaStage,
     LowPassStage,
@@ -25,7 +26,7 @@ from .validation import SourceReading, SourceStatus, ValidationConfig, validate
 
 _LOGGER = logging.getLogger(__name__)
 
-STATE_VERSION = 1
+STATE_VERSION = 2
 
 # Tolerance for comparing weight shares, so e.g. 30 % + 20 % counts as 50 %.
 _SHARE_EPSILON = 1e-9
@@ -154,8 +155,13 @@ class Pipeline:
         """The last combined value fed to the filters, which keep settling toward it
         while it is held."""
         self._last_good: float | None = None
-        """When quorum was last met."""
+        """When quorum and spike acceptance last allowed a finite output."""
         self._restored = False
+        self._last_evaluated: float | None = None
+
+    @property
+    def _outlier(self) -> OutlierStage | None:
+        return next((stage for stage in self.stages if isinstance(stage, OutlierStage)), None)
 
     def evaluate(
         self,
@@ -171,6 +177,13 @@ class Pipeline:
         as a new sample if that source is valid.
         """
         config = self.config
+        now = finite(now)
+        if self._last_evaluated is not None and now < self._last_evaluated:
+            # Wall-clock rollback must not extend the lifetime of a held value.
+            self._reset_stages()
+            self._value = self._last_good = None
+            self._restored = False
+        self._last_evaluated = now
         checked = tuple(validate(readings, config.validation, now))
         valid = [
             (r.entity_id, r.value)
@@ -180,21 +193,36 @@ class Pipeline:
         if new_sample and reported_by is not None:
             new_sample = any(entity_id == reported_by for entity_id, _ in valid)
 
-        if valid and len(valid) >= config.min_sources and self._enough_weight(valid):
+        combined = None
+        rejected = False
+        try:
+            if valid and len(valid) >= config.min_sources and self._enough_weight(valid):
+                combined = finite(
+                    self._learner.combine(valid, now)
+                    if self._learner is not None
+                    else combine(valid, config.method, config.weights)
+                )
+                value_in = combined
+                if (outlier := self._outlier) is not None:
+                    value_in = finite(outlier.process(combined, now, new_sample))
+                    rejected = not outlier.accepted
+                if not rejected:
+                    if self._value is None:
+                        self._reset_stages(keep_outlier=True)
+                    value = self._filter(value_in, now, new_sample)
+                    self._value = value
+                    self._input = value_in
+                    self._last_good = now
+                    self._restored = False
+                    return self._result(
+                        self._round(value), PipelineStatus.OK, combined, checked, valid
+                    )
+        except (ArithmeticError, ValueError) as err:
+            _LOGGER.debug("Discarding invalid calculation: %s", err)
+            self._reset_stages(keep_outlier=True)
             if self._learner is not None:
-                combined = self._learner.combine(valid, now)
-            else:
-                combined = combine(valid, config.method, config.weights)
-            if self._value is None:
-                # Starting up or recovering from "no data": old history is irrelevant.
-                self._reset_stages()
-            self._value = self._filter(combined, now, new_sample)
-            self._input = combined
-            self._last_good = now
-            self._restored = False
-            return self._result(
-                self._round(self._value), PipelineStatus.OK, combined, checked, valid
-            )
+                self._learner.reset()
+            combined = None
 
         if self._learner is not None:
             self._learner.advance(now)
@@ -207,18 +235,28 @@ class Pipeline:
             if self._input is not None:
                 # No new value, but the time-based filters keep settling toward
                 # the last one, however old it is.
-                self._value = self._filter(self._input, now, new_sample=False)
+                try:
+                    self._value = self._filter(self._input, now, new_sample=False)
+                except (ArithmeticError, ValueError) as err:
+                    _LOGGER.debug("Discarding invalid held filter state: %s", err)
+                    self._reset_stages(keep_outlier=True)
             status = PipelineStatus.RESTORED if self._restored else PipelineStatus.HOLDING
-            return self._result(self._round(self._value), status, None, checked, [])
+            return self._result(self._round(self._value), status, combined, checked, [])
 
         self._value = None
         self._input = None
         self._restored = False
-        return self._result(None, PipelineStatus.NO_DATA, None, checked, [])
+        # Preserve a rejecting gate across expiry, including a subsequent loss of
+        # quorum. Otherwise old filter history can be discarded.
+        self._reset_stages(
+            keep_outlier=rejected or (self._outlier is not None and not self._outlier.accepted)
+        )
+        return self._result(None, PipelineStatus.NO_DATA, combined, checked, [])
 
     def _filter(self, value: float, now: float, new_sample: bool) -> float:
         for stage in self.stages:
-            value = stage.process(value, now, new_sample)
+            if not isinstance(stage, OutlierStage):
+                value = finite(stage.process(value, now, new_sample))
         return value
 
     def _enough_weight(self, valid: Sequence[tuple[str, float]]) -> bool:
@@ -226,11 +264,11 @@ class Pipeline:
         config = self.config
         if not self._weighted or config.min_weight_share <= 0:
             return True
-        total = math.fsum(weight_of(config.weights, source) for source in config.sources)
-        if total <= 0:
+        if all(config.weights.get(source, 1.0) <= 0 for source in config.sources):
             # Every weight is 0, so they all count equally: no share to require.
             return True
-        share = math.fsum(weight_of(config.weights, entity_id) for entity_id, _ in valid) / total
+        shares = effective_weights([(source, 0.0) for source in config.sources], config.weights)
+        share = math.fsum(shares[entity_id] for entity_id, _ in valid)
         return share >= config.min_weight_share - _SHARE_EPSILON
 
     def _result(
@@ -256,6 +294,7 @@ class Pipeline:
             "value": self._value,
             "input": self._input,
             "last_good": self._last_good,
+            "last_evaluated": self._last_evaluated,
             "stages": {stage.kind: stage.dump() for stage in self.stages},
             "offsets": None if self._learner is None else self._learner.dump(),
         }
@@ -271,46 +310,70 @@ class Pipeline:
         With the filter state, the filters keep settling toward the last input while
         the restored value is shown; without it, the value is shown as is.
         """
-        if not data or data.get("version") != STATE_VERSION:
+        if not isinstance(data, Mapping) or data.get("version") not in (1, STATE_VERSION):
             return False
+        self._reset_stages()
+        self._value = self._last_good = None
+        self._restored = False
+        self._last_evaluated = now
         same_settings = data.get("fingerprint") == self.fingerprint
         if same_settings and self._learner is not None:
             try:
                 self._learner.load(data.get("offsets"))
-            except (AttributeError, TypeError, ValueError) as err:
+            except (AttributeError, TypeError, ValueError, OverflowError) as err:
                 _LOGGER.debug("Discarding saved source offsets: %s", err)
                 self._learner.reset()
         try:
             value = data["value"]
             last_good = data["last_good"]
-            if value is None or last_good is None:
+            if last_good is None:
                 return False
-            value, last_good = float(value), float(last_good)
-        except (KeyError, TypeError, ValueError):
+            value, last_good = optional_finite(value), finite(last_good)
+            last_evaluated = finite(data.get("last_evaluated", last_good))
+        except (KeyError, TypeError, ValueError, OverflowError):
             return False
-        if now - last_good > self.config.hold_time_s:
+        if last_good > last_evaluated or last_evaluated > now:
             return False
-
+        self._last_good = last_good
+        recent = value is not None and now - last_good <= self.config.hold_time_s
+        # Version 1 never recorded spike acceptance. Its output is safe to show,
+        # but its spike/filter history cannot establish whether it is fresh.
+        if same_settings and (data["version"] == STATE_VERSION or self._outlier is None):
+            try:
+                saved = data["stages"]
+                if not isinstance(saved, Mapping):
+                    raise ValueError("invalid stages")
+                for stage in self.stages:
+                    stage_data = saved[stage.kind]
+                    if not isinstance(stage_data, Mapping):
+                        raise ValueError("invalid stage")
+                    stage.load(stage_data)
+                    time = stage.dump().get("time")
+                    if time is not None and time > last_evaluated:
+                        raise ValueError("future stage time")
+                    if isinstance(stage, MovingAverageStage) and any(
+                        time > last_evaluated for time, _ in stage.dump()["samples"]
+                    ):
+                        raise ValueError("future sample time")
+                # Saved before "input" existed: just show the value.
+                self._input = optional_finite(data.get("input"))
+            except (KeyError, TypeError, ValueError, OverflowError) as err:
+                _LOGGER.debug("Discarding saved filter state: %s", err)
+                self._reset_stages()
+        if not recent:
+            self._reset_stages(
+                keep_outlier=self._outlier is not None and not self._outlier.accepted
+            )
+            return False
         self._value = value
         self._last_good = last_good
         self._restored = True
-
-        if same_settings:
-            try:
-                saved = data["stages"]
-                for stage in self.stages:
-                    stage.load(saved[stage.kind])
-                # Saved before "input" existed: just show the value.
-                saved_input = data.get("input")
-                self._input = None if saved_input is None else float(saved_input)
-            except (KeyError, TypeError, ValueError) as err:
-                _LOGGER.debug("Discarding saved filter state: %s", err)
-                self._reset_stages()
         return True
 
-    def _reset_stages(self) -> None:
+    def _reset_stages(self, *, keep_outlier: bool = False) -> None:
         for stage in self.stages:
-            stage.reset()
+            if not keep_outlier or not isinstance(stage, OutlierStage):
+                stage.reset()
         self._input = None
 
     def _round(self, value: float) -> float:

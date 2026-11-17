@@ -11,18 +11,31 @@
       },
       "single": {
         "title": "Filter one sensor",
-        "description": "Turn one sensor into a trustworthy, smoothed value. Readings that are unavailable, stale or out of range are ignored, and the last good value is held for a while instead.",
+        "description": "Turn one sensor into a trustworthy, smoothed value. Readings that are unavailable, stale or out of range are ignored, and the last good value is held for a while instead.\n\nSaved output: {unit}; device class: {device_class}. For a new helper, these are inferred from the sources unless you choose them in Advanced measurement settings. The saved choice stays the same when sources are reordered.",
         "data": {
           "name": "Name",
           "entity_id": "Source sensor"
         },
         "data_description": {
           "entity_id": "The sensor to filter."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced measurement settings",
+            "data": {
+              "unit": "Output unit",
+              "device_class": "Device class"
+            },
+            "data_description": {
+              "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+            }
+          }
         }
       },
       "combine": {
         "title": "Combine several sensors",
-        "description": "Combine several sensors into one trustworthy value. Sources that are unavailable, stale, out of range or disagree with the others are left out automatically.",
+        "description": "Combine several sensors into one trustworthy value. Sources that are unavailable, stale, out of range or disagree with the others are left out automatically.\n\nSaved output: {unit}; device class: {device_class}. For a new helper, these are inferred from the sources unless you choose them in Advanced measurement settings. The saved choice stays the same when sources are reordered.",
         "data": {
           "name": "Name",
           "entity_ids": "Source sensors",
@@ -31,6 +44,19 @@
         "data_description": {
           "entity_ids": "Sensors to combine. Drag to reorder: with the Priority method, the first valid sensor is used.",
           "method": "How the valid sources are combined into one value."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced measurement settings",
+            "data": {
+              "unit": "Output unit",
+              "device_class": "Device class"
+            },
+            "data_description": {
+              "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+            }
+          }
         }
       },
       "weights": {
@@ -141,24 +167,43 @@
       "incompatible_units": "The selected sensors have units that cannot be converted to each other.",
       "min_not_below_max": "The lowest plausible value must be lower than the highest.",
       "min_sources_too_high": "Minimum valid sources can't be higher than the number of selected sensors.",
-      "max_rate_not_positive": "Max change per minute must be greater than 0."
+      "max_rate_not_positive": "Max change per minute must be greater than 0.",
+      "dependency_cycle": "These sources create a cycle between Safe Filters helpers. Select sources that do not depend on this helper.",
+      "source_metadata_unknown": "Wait for the sources to load, or specify the output unit and device class in Advanced measurement settings.",
+      "incompatible_measurement": "The sources do not match the selected output measurement. Check the source units and Advanced measurement settings.",
+      "non_finite_number": "Enter a finite number.",
+      "invalid_device_class": "Choose a numeric sensor device class.",
+      "invalid_measurement_unit": "The output unit is not valid for this device class. Use the exact unit symbol, for example °C for temperature or W for power."
     }
   },
   "options": {
     "step": {
       "single": {
         "title": "Source",
-        "description": "Change the sensor to filter.",
+        "description": "Change the sensor to filter.\n\nSaved output: {unit}; device class: {device_class}. For a new helper, these are inferred from the sources unless you choose them in Advanced measurement settings. The saved choice stays the same when sources are reordered.",
         "data": {
           "entity_id": "Source sensor"
         },
         "data_description": {
           "entity_id": "The sensor to filter."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced measurement settings",
+            "data": {
+              "unit": "Output unit",
+              "device_class": "Device class"
+            },
+            "data_description": {
+              "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+            }
+          }
         }
       },
       "combine": {
         "title": "Sources",
-        "description": "Change the sensors and how they are combined.",
+        "description": "Change the sensors and how they are combined.\n\nSaved output: {unit}; device class: {device_class}. For a new helper, these are inferred from the sources unless you choose them in Advanced measurement settings. The saved choice stays the same when sources are reordered.",
         "data": {
           "entity_ids": "Source sensors",
           "method": "Combine method"
@@ -166,6 +211,19 @@
         "data_description": {
           "entity_ids": "Sensors to combine. Drag to reorder: with the Priority method, the first valid sensor is used.",
           "method": "How the valid sources are combined into one value."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced measurement settings",
+            "data": {
+              "unit": "Output unit",
+              "device_class": "Device class"
+            },
+            "data_description": {
+              "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+            }
+          }
         }
       },
       "weights": {
@@ -276,7 +334,13 @@
       "incompatible_units": "The selected sensors have units that cannot be converted to each other.",
       "min_not_below_max": "The lowest plausible value must be lower than the highest.",
       "min_sources_too_high": "Minimum valid sources can't be higher than the number of selected sensors.",
-      "max_rate_not_positive": "Max change per minute must be greater than 0."
+      "max_rate_not_positive": "Max change per minute must be greater than 0.",
+      "dependency_cycle": "These sources create a cycle between Safe Filters helpers. Select sources that do not depend on this helper.",
+      "source_metadata_unknown": "Wait for the sources to load, or specify the output unit and device class in Advanced measurement settings.",
+      "incompatible_measurement": "The sources do not match the selected output measurement. Check the source units and Advanced measurement settings.",
+      "non_finite_number": "Enter a finite number.",
+      "invalid_device_class": "Choose a numeric sensor device class.",
+      "invalid_measurement_unit": "The output unit is not valid for this device class. Use the exact unit symbol, for example °C for temperature or W for power."
     }
   },
   "selector": {
@@ -288,6 +352,70 @@
         "median": "Median",
         "weighted_mean": "Weighted mean",
         "priority": "Priority (first valid source)"
+      }
+    },
+    "output_device_class": {
+      "options": {
+        "auto": "Automatic (from sources)",
+        "none": "None",
+        "absolute_humidity": "Absolute humidity",
+        "apparent_power": "Apparent power",
+        "aqi": "Air quality index",
+        "area": "Area",
+        "atmospheric_pressure": "Atmospheric pressure",
+        "battery": "Battery",
+        "blood_glucose_concentration": "Blood glucose concentration",
+        "carbon_monoxide": "Carbon monoxide",
+        "carbon_dioxide": "Carbon dioxide",
+        "conductivity": "Conductivity",
+        "current": "Current",
+        "data_rate": "Data rate",
+        "data_size": "Data size",
+        "distance": "Distance",
+        "duration": "Duration",
+        "energy": "Energy",
+        "energy_distance": "Energy per distance",
+        "energy_storage": "Stored energy",
+        "frequency": "Frequency",
+        "gas": "Gas",
+        "humidity": "Humidity",
+        "illuminance": "Illuminance",
+        "irradiance": "Irradiance",
+        "moisture": "Moisture",
+        "monetary": "Monetary balance",
+        "nitrogen_dioxide": "Nitrogen dioxide",
+        "nitrogen_monoxide": "Nitrogen monoxide",
+        "nitrous_oxide": "Nitrous oxide",
+        "ozone": "Ozone",
+        "ph": "pH",
+        "pm1": "PM1",
+        "pm10": "PM10",
+        "pm25": "PM2.5",
+        "pm4": "PM4",
+        "power_factor": "Power factor",
+        "power": "Power",
+        "precipitation": "Precipitation",
+        "precipitation_intensity": "Precipitation intensity",
+        "pressure": "Pressure",
+        "radon": "Radon",
+        "reactive_energy": "Reactive energy",
+        "reactive_power": "Reactive power",
+        "signal_strength": "Signal strength",
+        "sound_pressure": "Sound pressure",
+        "speed": "Speed",
+        "sulphur_dioxide": "Sulphur dioxide",
+        "temperature": "Temperature",
+        "temperature_delta": "Temperature delta",
+        "volatile_organic_compounds": "Volatile organic compounds",
+        "volatile_organic_compounds_parts": "Volatile organic compounds parts",
+        "voltage": "Voltage",
+        "volume": "Volume",
+        "volume_storage": "Stored volume",
+        "volume_flow_rate": "Volume flow rate",
+        "water": "Water",
+        "weight": "Weight",
+        "wind_direction": "Wind direction",
+        "wind_speed": "Wind speed"
       }
     }
   }
