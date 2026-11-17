@@ -42,7 +42,7 @@ CONF_PRECISION = "precision"
 
 DEFAULT_METHOD = CombineMethod.MEDIAN
 DEFAULT_WEIGHT = 1.0
-DEFAULT_STALE_AFTER = 120.0  # minutes
+DEFAULT_STALE_AFTER = 0.0  # minutes; off, because many sources only report changes
 DEFAULT_MIN_SOURCES = 1
 DEFAULT_HOLD_TIME = 30.0  # minutes
 DEFAULT_OUTLIER_WINDOW = 5

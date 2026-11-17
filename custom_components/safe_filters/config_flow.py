@@ -336,6 +336,11 @@ OPTIONS_FLOW = {
 class SafeFiltersConfigFlow(SchemaConfigFlowHandler, domain=DOMAIN):
     """Handle a config or options flow for Safe Filters."""
 
+    VERSION = 1
+    # Entry version 1.2: the "stale after" default changed from 120 min to off
+    # (see async_migrate_entry).
+    MINOR_VERSION = 2
+
     config_flow = CONFIG_FLOW
     options_flow = OPTIONS_FLOW
 

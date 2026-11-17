@@ -182,6 +182,23 @@ async def test_single_sensor_validates_and_holds(
     assert state.attributes["status"] == "ok"
 
 
+async def test_steady_source_is_not_stale_by_default(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A source that only reports changes (ESPHome, MQTT) may hold one value for hours."""
+    set_temp(hass, "sensor.temp_a", 994.5)
+    options = single_options()
+    options.pop("stale_after")
+    await setup_entry(hass, options)
+
+    for _ in range(12):
+        await _tick(hass, freezer, 30)
+        state = get_state(hass)
+        assert state.state == "994.5"
+        assert state.attributes["status"] == "ok"
+        assert state.attributes["sources"]["sensor.temp_a"]["status"] == "ok"
+
+
 async def test_single_sensor_is_smoothed(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

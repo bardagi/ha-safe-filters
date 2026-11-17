@@ -56,7 +56,7 @@
         "data_description": {
           "min_value": "Readings below this are ignored. Leave empty for no limit.",
           "max_value": "Readings above this are ignored. Leave empty for no limit.",
-          "stale_after": "A source that has not reported for this long is ignored. This catches dead devices that keep their last value. 0 turns the check off.",
+          "stale_after": "A source that has not reported for this long is ignored. Only turn this on if the source sends its value regularly even when it doesn't change. Many integrations, such as ESPHome and MQTT, only send changes, so a steady value would be treated as a dead device. 0 turns the check off.",
           "max_deviation": "With 3 or more valid sources, a source further than this from the median of all of them is ignored. Leave empty to turn off.",
           "min_sources": "How many sources must be valid to compute a new value.",
           "hold_time": "When there is no valid reading (or too few valid sources), keep showing the last good value this long, then become unavailable. Also covers restarts."
@@ -173,7 +173,7 @@
         "data_description": {
           "min_value": "Readings below this are ignored. Leave empty for no limit.",
           "max_value": "Readings above this are ignored. Leave empty for no limit.",
-          "stale_after": "A source that has not reported for this long is ignored. This catches dead devices that keep their last value. 0 turns the check off.",
+          "stale_after": "A source that has not reported for this long is ignored. Only turn this on if the source sends its value regularly even when it doesn't change. Many integrations, such as ESPHome and MQTT, only send changes, so a steady value would be treated as a dead device. 0 turns the check off.",
           "max_deviation": "With 3 or more valid sources, a source further than this from the median of all of them is ignored. Leave empty to turn off.",
           "min_sources": "How many sources must be valid to compute a new value.",
           "hold_time": "When there is no valid reading (or too few valid sources), keep showing the last good value this long, then become unavailable. Also covers restarts."

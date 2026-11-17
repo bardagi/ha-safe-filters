@@ -56,7 +56,7 @@
         "data_description": {
           "min_value": "Målinger under dette ignoreres. La stå tomt for ingen grense.",
           "max_value": "Målinger over dette ignoreres. La stå tomt for ingen grense.",
-          "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Dette fanger døde enheter som beholder siste verdi. 0 slår av sjekken.",
+          "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Slå bare på dette hvis kilden sender verdien jevnlig selv når den ikke endrer seg. Mange integrasjoner, som ESPHome og MQTT, sender bare endringer, så en stabil verdi ville blitt behandlet som en død enhet. 0 slår av sjekken.",
           "max_deviation": "Med 3 eller flere gyldige kilder ignoreres en kilde som ligger lenger unna medianen av alle enn dette. La stå tomt for å slå av.",
           "min_sources": "Hvor mange kilder som må være gyldige for å beregne en ny verdi.",
           "hold_time": "Når det ikke finnes noen gyldig måling (eller for få kilder er gyldige), vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."
@@ -173,7 +173,7 @@
         "data_description": {
           "min_value": "Målinger under dette ignoreres. La stå tomt for ingen grense.",
           "max_value": "Målinger over dette ignoreres. La stå tomt for ingen grense.",
-          "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Dette fanger døde enheter som beholder siste verdi. 0 slår av sjekken.",
+          "stale_after": "En kilde som ikke har rapportert på så lenge, ignoreres. Slå bare på dette hvis kilden sender verdien jevnlig selv når den ikke endrer seg. Mange integrasjoner, som ESPHome og MQTT, sender bare endringer, så en stabil verdi ville blitt behandlet som en død enhet. 0 slår av sjekken.",
           "max_deviation": "Med 3 eller flere gyldige kilder ignoreres en kilde som ligger lenger unna medianen av alle enn dette. La stå tomt for å slå av.",
           "min_sources": "Hvor mange kilder som må være gyldige for å beregne en ny verdi.",
           "hold_time": "Når det ikke finnes noen gyldig måling (eller for få kilder er gyldige), vises siste gode verdi så lenge, og deretter blir sensoren utilgjengelig. Dekker også omstarter."

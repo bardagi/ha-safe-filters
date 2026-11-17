@@ -21,7 +21,7 @@ sources ──► validate each ──► enough valid? ──► combine ──
 
 | Problem with the usual YAML chain | What Safe Filters does |
 |---|---|
-| `min_max` keeps using a dead sensor's last value forever. | Sources that haven't reported within *Stale after* are ignored. Staleness is based on `last_reported`, so a sensor reporting the same value isn't treated as dead. |
+| `min_max` keeps using a dead sensor's last value forever. | Sources that are `unavailable` are always ignored. Optionally, *Stale after* also ignores a source that has stopped reporting but kept its last value. |
 | One glitching sensor (e.g. -40 °C on a low battery) wins `min`. | Range limits, plus *max deviation* from the median of the other sources. |
 | `median` of two sensors is just the average, so it rejects nothing. | Validation works per source, whatever the combine method. |
 | The `lowpass` filter's time constant counts *samples*, not minutes. | Low-pass and moving average use real elapsed time. |
@@ -68,7 +68,7 @@ With `weighted_mean`, an extra step asks for a weight per source. Weights are re
 | Option | Default | Description |
 |---|---|---|
 | Lowest / highest plausible value | – | Readings outside this range are ignored. |
-| Stale after | 120 min | A `sensor` that hasn't reported for this long is ignored. `0` = off. Not applied to `number`/`input_number`. |
+| Stale after | 0 (off) | A `sensor` that hasn't reported for this long is ignored. Only turn this on for sources that send their value regularly even when it doesn't change. Many integrations, such as ESPHome and MQTT, only send changes, so a steady value would look like a dead device (in ESPHome, `force_update: true` makes a sensor re-send unchanged values). Not applied to `number`/`input_number`. |
 | Max deviation | – | Combine only. With ≥ 3 valid sources, ignore a source further than this from their median. |
 | Minimum valid sources | 1 | Combine only. Fewer valid sources than this = no new value. |
 | Hold last value for | 30 min | When there is no valid reading (or too few valid sources), keep showing the last good value (status `holding`), then become `unavailable`. Also limits how old a value restored after a restart may be. |
@@ -103,7 +103,8 @@ The sensor has `state_class: measurement` (`total` for energy, gas, water and mo
 These are starting points. Adjust them to how often your sensors report.
 
 **Outdoor temperature from several sensors, some of which get sun**
-- Method `min` (the shaded sensor wins); range -55 to 45 °C; stale after 90 min; minimum valid sources 2.
+- Method `min` (the shaded sensor wins); range -55 to 45 °C; minimum valid sources 2.
+- If the sensors send their value regularly even when it doesn't change: stale after 90 min.
 - Spike rejection: window 5, radius 2.5. Low-pass 5 min. Decimals 1.
 - Use *max deviation* only if all sensors are placed similarly: in strong sun, a correctly shaded sensor can be the odd one out.
 

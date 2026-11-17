@@ -49,7 +49,7 @@ def test_minimal_options_use_defaults() -> None:
     assert config.method is CombineMethod.MIN
     assert config.weights == {}
     assert config.validation.min_value is None
-    assert config.validation.stale_after_s == 7200.0
+    assert config.validation.stale_after_s == 0.0
     assert config.min_sources == 1
     assert config.hold_time_s == 1800.0
     assert config.outlier is None
