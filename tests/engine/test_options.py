@@ -1,9 +1,12 @@
 """Tests for turning config entry options into a pipeline config."""
 
+import pytest
+
 from custom_components.safe_filters.engine import (
     CombineMethod,
     build_config,
     is_single,
+    source_attributes,
     source_ids,
 )
 
@@ -162,3 +165,34 @@ def test_source_ids_and_is_single() -> None:
     assert source_ids(single) == ("sensor.a",)
     assert source_ids(combine) == ("sensor.b", "sensor.a")
     assert source_ids({}) == ()
+
+
+def test_source_attributes_are_pruned_to_the_sources() -> None:
+    options = {
+        "entity_ids": ["sensor.a", "weather.home"],
+        "attributes": {"weather.home": "humidity", "weather.old": "humidity"},
+    }
+    assert source_attributes(options) == {"weather.home": "humidity"}
+    assert build_config(options).source_attributes == {"weather.home": "humidity"}
+    assert source_attributes({"entity_id": "climate.x", "attributes": {"climate.x": "a"}}) == {
+        "climate.x": "a"
+    }
+
+
+@pytest.mark.parametrize("saved", [None, {}])
+def test_no_source_attributes(saved: object) -> None:
+    assert source_attributes({"entity_ids": ["sensor.a"], "attributes": saved}) == {}
+    assert source_attributes({"entity_ids": ["sensor.a"]}) == {}
+
+
+@pytest.mark.parametrize("attribute", ["", 5, None, ["humidity"], {"name": "humidity"}])
+def test_malformed_attribute_never_falls_back_to_the_state(attribute: object) -> None:
+    """A source set to read an attribute must not quietly read its state instead."""
+    options = {"entity_ids": ["sensor.a", "sensor.b"], "attributes": {"sensor.a": attribute}}
+    assert source_attributes(options) == {"sensor.a": None}
+
+
+@pytest.mark.parametrize("saved", [["sensor.a"], "humidity", 1])
+def test_malformed_attribute_mapping_reads_no_source(saved: object) -> None:
+    options = {"entity_ids": ["sensor.a", "sensor.b"], "attributes": saved}
+    assert source_attributes(options) == {"sensor.a": None, "sensor.b": None}

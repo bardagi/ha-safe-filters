@@ -17,18 +17,20 @@
           "entity_id": "Source sensor"
         },
         "data_description": {
-          "entity_id": "The sensor to filter."
+          "entity_id": "The sensor to filter. A weather, climate, water heater or humidifier entity works too: you choose which of its values to read in the next step."
         },
         "sections": {
           "advanced": {
             "name": "Advanced measurement settings",
             "data": {
               "unit": "Output unit",
-              "device_class": "Device class"
+              "device_class": "Device class",
+              "read_attributes": "Read an attribute instead of the state for some sensors"
             },
             "data_description": {
               "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
-              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible.",
+              "read_attributes": "Adds a step where you can choose to read one of a sensor's attributes instead of its state. Weather, climate and similar entities always get this step."
             }
           }
         }
@@ -42,7 +44,7 @@
           "method": "Combine method"
         },
         "data_description": {
-          "entity_ids": "Sensors to combine. Drag to reorder: with the Priority method, the first valid sensor is used.",
+          "entity_ids": "Sensors to combine. Drag to reorder: with the Priority method, the first valid sensor is used. Weather, climate, water heater and humidifier entities work too: you choose which of their values to read in the next step.",
           "method": "How the valid sources are combined into one value."
         },
         "sections": {
@@ -50,14 +52,20 @@
             "name": "Advanced measurement settings",
             "data": {
               "unit": "Output unit",
-              "device_class": "Device class"
+              "device_class": "Device class",
+              "read_attributes": "Read an attribute instead of the state for some sensors"
             },
             "data_description": {
               "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
-              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible.",
+              "read_attributes": "Adds a step where you can choose to read one of a sensor's attributes instead of its state. Weather, climate and similar entities always get this step."
             }
           }
         }
+      },
+      "values": {
+        "title": "Choose values",
+        "description": "Choose which value to read from each source. Weather, climate and similar entities don't have a numeric state, so one of their attributes is used. The list shows each value as it is now; values without a unit are read in the helper's unit. If the value is missing or isn't a number, that source is left out, like an unavailable sensor.\n\n{sources}"
       },
       "weights": {
         "title": "Weights",
@@ -173,7 +181,9 @@
       "incompatible_measurement": "The sources do not match the selected output measurement. Check the source units and Advanced measurement settings.",
       "non_finite_number": "Enter a finite number.",
       "invalid_device_class": "Choose a numeric sensor device class.",
-      "invalid_measurement_unit": "The output unit is not valid for this device class. Use the exact unit symbol, for example °C for temperature or W for power."
+      "invalid_measurement_unit": "The output unit is not valid for this device class. Use the exact unit symbol, for example °C for temperature or W for power.",
+      "attribute_required": "Choose a value for every source.",
+      "attribute_not_numeric": "The chosen attribute doesn't exist on that source or isn't a number right now. Pick one from the list."
     }
   },
   "options": {
@@ -185,18 +195,20 @@
           "entity_id": "Source sensor"
         },
         "data_description": {
-          "entity_id": "The sensor to filter."
+          "entity_id": "The sensor to filter. A weather, climate, water heater or humidifier entity works too: you choose which of its values to read in the next step."
         },
         "sections": {
           "advanced": {
             "name": "Advanced measurement settings",
             "data": {
               "unit": "Output unit",
-              "device_class": "Device class"
+              "device_class": "Device class",
+              "read_attributes": "Read an attribute instead of the state for some sensors"
             },
             "data_description": {
               "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
-              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible.",
+              "read_attributes": "Adds a step where you can choose to read one of a sensor's attributes instead of its state. Weather, climate and similar entities always get this step."
             }
           }
         }
@@ -209,7 +221,7 @@
           "method": "Combine method"
         },
         "data_description": {
-          "entity_ids": "Sensors to combine. Drag to reorder: with the Priority method, the first valid sensor is used.",
+          "entity_ids": "Sensors to combine. Drag to reorder: with the Priority method, the first valid sensor is used. Weather, climate, water heater and humidifier entities work too: you choose which of their values to read in the next step.",
           "method": "How the valid sources are combined into one value."
         },
         "sections": {
@@ -217,14 +229,20 @@
             "name": "Advanced measurement settings",
             "data": {
               "unit": "Output unit",
-              "device_class": "Device class"
+              "device_class": "Device class",
+              "read_attributes": "Read an attribute instead of the state for some sensors"
             },
             "data_description": {
               "unit": "For example °C, °F, hPa or W. Leave empty to keep the saved unit, or infer it for a new helper. Compatible unit changes convert existing thresholds. Other measurement changes clear range/deviation limits and disable spike rejection and rate limiting; review the following steps. Changing the unit or class restarts filter history.",
-              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible."
+              "device_class": "What the value measures. Automatic uses the sources; None removes the device class. The class and unit must match, and known source classes must be compatible.",
+              "read_attributes": "Adds a step where you can choose to read one of a sensor's attributes instead of its state. Weather, climate and similar entities always get this step."
             }
           }
         }
+      },
+      "values": {
+        "title": "Choose values",
+        "description": "Choose which value to read from each source. Weather, climate and similar entities don't have a numeric state, so one of their attributes is used. The list shows each value as it is now; values without a unit are read in the helper's unit. If the value is missing or isn't a number, that source is left out, like an unavailable sensor.\n\n{sources}"
       },
       "weights": {
         "title": "Weights",
@@ -340,7 +358,9 @@
       "incompatible_measurement": "The sources do not match the selected output measurement. Check the source units and Advanced measurement settings.",
       "non_finite_number": "Enter a finite number.",
       "invalid_device_class": "Choose a numeric sensor device class.",
-      "invalid_measurement_unit": "The output unit is not valid for this device class. Use the exact unit symbol, for example °C for temperature or W for power."
+      "invalid_measurement_unit": "The output unit is not valid for this device class. Use the exact unit symbol, for example °C for temperature or W for power.",
+      "attribute_required": "Choose a value for every source.",
+      "attribute_not_numeric": "The chosen attribute doesn't exist on that source or isn't a number right now. Pick one from the list."
     }
   },
   "selector": {

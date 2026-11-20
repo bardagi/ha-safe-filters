@@ -58,6 +58,8 @@ class PipelineConfig:
     """Everything the pipeline needs, in engine units (seconds, units/minute)."""
 
     sources: tuple[str, ...]
+    source_attributes: Mapping[str, str | None] = field(default_factory=dict)
+    """The attribute read for each source that doesn't read its state."""
     method: CombineMethod = CombineMethod.MEAN
     weights: Mapping[str, float] = field(default_factory=dict)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
@@ -95,6 +97,10 @@ class PipelineConfig:
         if self.ema_readings is not None:
             # Only when set, so entries without it keep their saved filter state.
             relevant["ema_readings"] = self.ema_readings
+        if self.source_attributes:
+            # Only when set, for the same reason. Reading another value of a source
+            # is a different measurement, so the filters must start fresh.
+            relevant["source_attributes"] = dict(sorted(self.source_attributes.items()))
         encoded = json.dumps(relevant, sort_keys=True).encode()
         return hashlib.sha256(encoded).hexdigest()[:16]
 

@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Final
 
 from .engine.options import (
+    CONF_ATTRIBUTES,
     CONF_EMA,
     CONF_ENABLED,
     CONF_ENTITY_ID,
@@ -62,6 +63,7 @@ __all__ = [
     "ATTR_SOURCES",
     "ATTR_STATUS",
     "ATTR_VALID_SOURCES",
+    "CONF_ATTRIBUTES",
     "CONF_EMA",
     "CONF_ENABLED",
     "CONF_ENTITY_ID",

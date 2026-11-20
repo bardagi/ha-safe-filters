@@ -167,6 +167,25 @@ def test_fingerprint_unchanged_without_ema() -> None:
     assert with_ema.state_fingerprint() != config.state_fingerprint()
 
 
+def test_fingerprint_changes_with_the_value_read() -> None:
+    """Saved filter state is only reused while each source provides the same value."""
+    config = PipelineConfig(sources=SOURCES, lowpass_time_constant_s=300.0)
+    empty = PipelineConfig(sources=SOURCES, lowpass_time_constant_s=300.0, source_attributes={})
+    assert empty.state_fingerprint() == config.state_fingerprint()
+    fingerprints = {
+        PipelineConfig(
+            sources=SOURCES, lowpass_time_constant_s=300.0, source_attributes=attributes
+        ).state_fingerprint()
+        for attributes in (
+            {},
+            {"sensor.c": "humidity"},
+            {"sensor.c": "temperature"},
+            {"sensor.b": "humidity"},
+        )
+    }
+    assert len(fingerprints) == 4
+
+
 def test_spike_never_reaches_the_smoother() -> None:
     pipeline = make(
         method=CombineMethod.MEDIAN,

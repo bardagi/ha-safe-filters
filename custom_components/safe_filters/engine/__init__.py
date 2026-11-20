@@ -2,7 +2,7 @@
 
 from .combine import CombineMethod, combine, effective_weights
 from .compensation import OffsetLearner
-from .options import build_config, is_single, source_ids
+from .options import build_config, is_single, source_attributes, source_ids
 from .pipeline import (
     OutlierConfig,
     Pipeline,
@@ -41,6 +41,7 @@ __all__ = [
     "combine",
     "effective_weights",
     "is_single",
+    "source_attributes",
     "source_ids",
     "validate",
 ]

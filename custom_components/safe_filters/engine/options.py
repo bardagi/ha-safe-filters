@@ -24,6 +24,8 @@ CONF_MIN_WEIGHT = "min_weight"
 """Weighted mean: % of the total weight that must be valid."""
 CONF_OFFSET_LEARNING = "offset_learning"
 """Weighted mean: minutes over which source offsets are learned; 0 = off."""
+CONF_ATTRIBUTES = "attributes"
+"""Sources read from an attribute instead of their state: ``{entity_id: attribute}``."""
 
 CONF_MIN_VALUE = "min_value"
 CONF_MAX_VALUE = "max_value"
@@ -78,6 +80,28 @@ def source_ids(options: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(options.get(CONF_ENTITY_IDS, ()))
 
 
+def source_attributes(options: Mapping[str, Any]) -> dict[str, str | None]:
+    """The attribute each source reads, for the sources that read one.
+
+    Sources that read their state are left out. A malformed value maps to
+    ``None``: that source can never be read. It must not fall back to the state,
+    which measures something else.
+    """
+    saved = options.get(CONF_ATTRIBUTES)
+    sources = source_ids(options)
+    if saved is None:
+        return {}
+    if not isinstance(saved, Mapping):
+        # Can't tell which sources were meant to read an attribute: trust none.
+        return dict.fromkeys(sources)
+    return {
+        entity_id: attribute if isinstance(attribute, str) and attribute else None
+        for entity_id in sources
+        if entity_id in saved
+        for attribute in (saved[entity_id],)
+    }
+
+
 def build_config(options: Mapping[str, Any]) -> PipelineConfig:
     """Turn config entry options into a :class:`PipelineConfig`."""
     sources = source_ids(options)
@@ -123,6 +147,7 @@ def build_config(options: Mapping[str, Any]) -> PipelineConfig:
 
     return PipelineConfig(
         sources=sources,
+        source_attributes=source_attributes(options),
         method=method,
         weights=weights,
         validation=validation,

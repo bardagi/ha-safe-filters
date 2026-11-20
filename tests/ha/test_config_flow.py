@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from homeassistant import config_entries
@@ -319,3 +319,287 @@ async def test_quality_rejects_nonfinite_numbers(hass: HomeAssistant, value: flo
         result["flow_id"], {**QUALITY_INPUT, "min_value": value}
     )
     assert result["errors"] == {"base": "non_finite_number"}
+
+
+WEATHER = "weather.home"
+
+
+def _fields(result: ConfigFlowResult) -> dict[str, dict[str, Any]]:
+    """The form fields as the frontend gets them, by name."""
+    fields = cast(
+        list[dict[str, Any]],
+        to_field_list(result["data_schema"], custom_serializer=cv.custom_serializer),
+    )
+    return {field["name"]: field for field in fields}
+
+
+def _humidity_sources(hass: HomeAssistant, *, weather: str = "cloudy") -> None:
+    for entity_id, value in (("sensor.hum_a", 70), ("sensor.hum_b", 72)):
+        hass.states.async_set(
+            entity_id, str(value), {"unit_of_measurement": "%", "device_class": "humidity"}
+        )
+    hass.states.async_set(
+        WEATHER,
+        weather,
+        {
+            "friendly_name": "Home",
+            "temperature": 5.0,
+            "temperature_unit": "°C",
+            "humidity": 80,
+            "pressure": 1012.0,
+            "pressure_unit": "hPa",
+            "wind_bearing": "NW",
+            "supported_features": 3,
+        },
+    )
+
+
+async def _create(hass: HomeAssistant, result: ConfigFlowResult) -> ConfigFlowResult:
+    """Finish a config flow from the weights or quality step with default settings."""
+    if result["step_id"] == "weights":
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    single = "min_sources" not in _schema_keys(result)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], SINGLE_QUALITY_INPUT if single else {**QUALITY_INPUT, "min_sources": 1}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], FILTERS_INPUT)
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    return result
+
+
+async def test_weather_source_asks_which_value(hass: HomeAssistant) -> None:
+    _humidity_sources(hass)
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Outdoor",
+            "entity_ids": ["sensor.hum_a", "sensor.hum_b", WEATHER],
+            "method": "mean",
+        },
+    )
+    assert result["step_id"] == "values"
+    _assert_serializable(result)
+    # Only the source without a numeric state gets a choice.
+    fields = _fields(result)
+    assert list(fields) == [WEATHER]
+    # Pre-selected: the value that measures the same as the other sources.
+    assert fields[WEATHER]["default"] == "humidity"
+    options = fields[WEATHER]["selector"]["select"]["options"]
+    assert options[:3] == [
+        {"value": "temperature", "label": "temperature: 5.0 °C"},
+        {"value": "humidity", "label": "humidity: 80 %"},
+        {"value": "pressure", "label": "pressure: 1012.0 hPa"},
+    ]
+    # Not offered: text values and settings.
+    assert {option["value"] for option in options}.isdisjoint(
+        {"wind_bearing", "supported_features", "__state__"}
+    )
+    assert "`weather.home`: Home" in _placeholders(result)["sources"]
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {WEATHER: "humidity"}
+    )
+    assert result["step_id"] == "quality"
+    assert result["description_placeholders"] == {"unit": "%"}
+    result = await _create(hass, result)
+    assert result["options"]["attributes"] == {WEATHER: "humidity"}
+    assert result["options"]["measurement"] == {"unit": "%", "device_class": "humidity"}
+    assert "advanced" not in result["options"]
+    assert get_state(hass).state == "74.0"
+
+
+async def test_weighted_flow_shows_the_attribute(hass: HomeAssistant) -> None:
+    _humidity_sources(hass)
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"name": "Outdoor", "entity_ids": ["sensor.hum_a", WEATHER], "method": "weighted_mean"},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {WEATHER: "humidity"}
+    )
+    assert result["step_id"] == "weights"
+    assert "`weather.home` (humidity): Home" in _placeholders(result)["sources"]
+
+
+@pytest.mark.parametrize(
+    ("choice", "error"),
+    [
+        ("__state__", "attribute_required"),
+        ("", "attribute_required"),
+        ("humidty", "attribute_not_numeric"),
+        ("wind_bearing", "attribute_not_numeric"),
+        ("temperature", "incompatible_units"),
+    ],
+)
+async def test_invalid_value_choice(hass: HomeAssistant, choice: str, error: str) -> None:
+    _humidity_sources(hass)
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"name": "Outdoor", "entity_ids": ["sensor.hum_a", WEATHER], "method": "mean"},
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {WEATHER: choice})
+    assert result["step_id"] == "values"
+    assert result["errors"] == {"base": error}
+
+    # Fixing the choice continues the flow.
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {WEATHER: "humidity"}
+    )
+    assert result["step_id"] == "quality"
+
+
+async def test_single_weather_attribute_infers_the_measurement(hass: HomeAssistant) -> None:
+    _humidity_sources(hass)
+    result = await _start(hass, "single")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Weather humidity", "entity_id": WEATHER}
+    )
+    assert result["step_id"] == "values"
+    # Nothing else to go by: the first well-known value.
+    assert _fields(result)[WEATHER]["default"] == "temperature"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {WEATHER: "humidity"}
+    )
+    assert result["description_placeholders"] == {"unit": "%"}
+    result = await _create(hass, result)
+    assert result["options"]["measurement"] == {"unit": "%", "device_class": "humidity"}
+    state = get_state(hass, "sensor.weather_humidity")
+    assert state.state == "80.0"
+    assert state.attributes["device_class"] == "humidity"
+
+
+async def test_unloaded_weather_source_needs_the_measurement(hass: HomeAssistant) -> None:
+    """Asked at the source step, where the measurement can still be entered."""
+    _humidity_sources(hass, weather="unavailable")
+    result = await _start(hass)
+    user_input = {"name": "Outdoor", "entity_ids": ["sensor.hum_a", WEATHER], "method": "mean"}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+    assert result["errors"] == {"base": "source_metadata_unknown"}
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {**user_input, "advanced": {"unit": "%", "device_class": "humidity"}},
+    )
+    assert result["step_id"] == "values"
+    # All well-known values are offered while the entity isn't loaded.
+    field = _fields(result)[WEATHER]
+    assert {"value": "humidity", "label": "humidity"} in field["selector"]["select"]["options"]
+    assert field["default"] == "humidity"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {WEATHER: "humidity"}
+    )
+    assert result["description_placeholders"] == {"unit": "%"}
+
+
+async def test_manual_measurement_survives_the_values_step(hass: HomeAssistant) -> None:
+    _humidity_sources(hass)
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Outdoor",
+            "entity_ids": ["sensor.temp_a", "sensor.temp_b", WEATHER],
+            "method": "mean",
+            "advanced": {"unit": "°F", "device_class": "temperature"},
+        },
+    )
+    assert _fields(result)[WEATHER]["default"] == "temperature"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {WEATHER: "temperature"}
+    )
+    assert result["description_placeholders"] == {"unit": "°F"}
+    result = await _create(hass, result)
+    assert result["options"]["measurement"] == {"unit": "°F", "device_class": "temperature"}
+    # (10 + 12 + 5) / 3 °C = 9 °C = 48.2 °F
+    assert get_state(hass).state == "48.2"
+
+
+async def test_sensor_attribute_on_request(hass: HomeAssistant) -> None:
+    hass.states.async_set(
+        "sensor.temp_a",
+        "10.0",
+        {"unit_of_measurement": "°C", "device_class": "temperature", "raw": 10.4, "min": 0},
+    )
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Outdoor",
+            "entity_ids": ["sensor.temp_a", "sensor.temp_b"],
+            "method": "mean",
+            "advanced": {"device_class": "auto", "read_attributes": True},
+        },
+    )
+    assert result["step_id"] == "values"
+    fields = _fields(result)
+    assert list(fields) == ["sensor.temp_a", "sensor.temp_b"]
+    assert fields["sensor.temp_a"]["default"] == "__state__"
+    assert fields["sensor.temp_a"]["selector"]["select"]["options"] == [
+        {"value": "__state__", "label": "state: 10.0 °C"},
+        {"value": "raw", "label": "raw: 10.4"},
+    ]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"sensor.temp_a": "raw", "sensor.temp_b": "__state__"}
+    )
+    result = await _create(hass, result)
+    assert result["options"]["attributes"] == {"sensor.temp_a": "raw"}
+    assert result["options"]["measurement"] == {"unit": "°C", "device_class": "temperature"}
+    assert get_state(hass).state == "11.2"
+
+    # Editing: the checkbox starts ticked, and the choice is kept.
+    entry = result["result"]
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    advanced = {field["name"]: field for field in _fields(result)["advanced"]["schema"]}
+    assert advanced["read_attributes"]["default"] is True
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"entity_ids": ["sensor.temp_a", "sensor.temp_b"], "method": "mean"}
+    )
+    assert result["step_id"] == "values"
+    assert _fields(result)["sensor.temp_a"]["default"] == "raw"
+
+
+async def test_options_flow_keeps_and_clears_attributes(hass: HomeAssistant) -> None:
+    _humidity_sources(hass)
+    sources = ["sensor.hum_a", "sensor.hum_b", WEATHER]
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Outdoor", "entity_ids": sources, "method": "mean"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {WEATHER: "humidity"}
+    )
+    entry = (await _create(hass, result))["result"]
+
+    # Unchanged sources: the saved choice is pre-selected.
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"entity_ids": sources, "method": "max"}
+    )
+    assert result["step_id"] == "values"
+    assert _fields(result)[WEATHER]["default"] == "humidity"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {WEATHER: "humidity"}
+    )
+    assert result["step_id"] == "quality"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], QUALITY_INPUT)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], FILTERS_INPUT)
+    await hass.async_block_till_done()
+    assert entry.options["attributes"] == {WEATHER: "humidity"}
+    assert "advanced" not in entry.options
+    assert get_state(hass).state == "80.0"
+
+    # Without the weather entity: no values step, and the choice is dropped.
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"entity_ids": sources[:2], "method": "max"}
+    )
+    assert result["step_id"] == "quality"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], QUALITY_INPUT)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], FILTERS_INPUT)
+    await hass.async_block_till_done()
+    assert "attributes" not in entry.options
+    assert get_state(hass).state == "72.0"

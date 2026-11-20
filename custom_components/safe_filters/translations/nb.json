@@ -17,18 +17,20 @@
           "entity_id": "Kildesensor"
         },
         "data_description": {
-          "entity_id": "Sensoren som skal filtreres."
+          "entity_id": "Sensoren som skal filtreres. En vær-, klima-, varmtvannsbereder- eller luftfukterentitet fungerer også: du velger hvilken av verdiene som skal leses i neste trinn."
         },
         "sections": {
           "advanced": {
             "name": "Avanserte måleinnstillinger",
             "data": {
               "unit": "Utgangsenhet",
-              "device_class": "Enhetsklasse"
+              "device_class": "Enhetsklasse",
+              "read_attributes": "Les et attributt i stedet for tilstanden for noen sensorer"
             },
             "data_description": {
               "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
-              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible.",
+              "read_attributes": "Legger til et trinn der du kan velge å lese et av sensorens attributter i stedet for tilstanden. Vær-, klima- og lignende entiteter får alltid dette trinnet."
             }
           }
         }
@@ -42,7 +44,7 @@
           "method": "Kombineringsmetode"
         },
         "data_description": {
-          "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren.",
+          "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren. Vær-, klima-, varmtvannsbereder- og luftfukterentiteter fungerer også: du velger hvilke av verdiene som skal leses i neste trinn.",
           "method": "Hvordan de gyldige kildene kombineres til én verdi."
         },
         "sections": {
@@ -50,14 +52,20 @@
             "name": "Avanserte måleinnstillinger",
             "data": {
               "unit": "Utgangsenhet",
-              "device_class": "Enhetsklasse"
+              "device_class": "Enhetsklasse",
+              "read_attributes": "Les et attributt i stedet for tilstanden for noen sensorer"
             },
             "data_description": {
               "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
-              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible.",
+              "read_attributes": "Legger til et trinn der du kan velge å lese et av sensorens attributter i stedet for tilstanden. Vær-, klima- og lignende entiteter får alltid dette trinnet."
             }
           }
         }
+      },
+      "values": {
+        "title": "Velg verdier",
+        "description": "Velg hvilken verdi som skal leses fra hver kilde. Vær-, klima- og lignende entiteter har ingen numerisk tilstand, så et av attributtene deres brukes. Listen viser hver verdi slik den er nå; verdier uten enhet leses i hjelperens enhet. Hvis verdien mangler eller ikke er et tall, utelates kilden, som en utilgjengelig sensor.\n\n{sources}"
       },
       "weights": {
         "title": "Vekting",
@@ -173,7 +181,9 @@
       "incompatible_measurement": "Kildene passer ikke med den valgte utgangsmålingen. Kontroller kildeenhetene og Avanserte måleinnstillinger.",
       "non_finite_number": "Skriv inn et endelig tall.",
       "invalid_device_class": "Velg en enhetsklasse for numeriske sensorer.",
-      "invalid_measurement_unit": "Utgangsenheten er ikke gyldig for denne enhetsklassen. Bruk riktig enhetssymbol, for eksempel °C for temperatur eller W for effekt."
+      "invalid_measurement_unit": "Utgangsenheten er ikke gyldig for denne enhetsklassen. Bruk riktig enhetssymbol, for eksempel °C for temperatur eller W for effekt.",
+      "attribute_required": "Velg en verdi for hver kilde.",
+      "attribute_not_numeric": "Det valgte attributtet finnes ikke på kilden eller er ikke et tall nå. Velg et fra listen."
     }
   },
   "options": {
@@ -185,18 +195,20 @@
           "entity_id": "Kildesensor"
         },
         "data_description": {
-          "entity_id": "Sensoren som skal filtreres."
+          "entity_id": "Sensoren som skal filtreres. En vær-, klima-, varmtvannsbereder- eller luftfukterentitet fungerer også: du velger hvilken av verdiene som skal leses i neste trinn."
         },
         "sections": {
           "advanced": {
             "name": "Avanserte måleinnstillinger",
             "data": {
               "unit": "Utgangsenhet",
-              "device_class": "Enhetsklasse"
+              "device_class": "Enhetsklasse",
+              "read_attributes": "Les et attributt i stedet for tilstanden for noen sensorer"
             },
             "data_description": {
               "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
-              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible.",
+              "read_attributes": "Legger til et trinn der du kan velge å lese et av sensorens attributter i stedet for tilstanden. Vær-, klima- og lignende entiteter får alltid dette trinnet."
             }
           }
         }
@@ -209,7 +221,7 @@
           "method": "Kombineringsmetode"
         },
         "data_description": {
-          "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren.",
+          "entity_ids": "Sensorene som skal kombineres. Dra for å endre rekkefølge: med metoden Prioritet brukes den første gyldige sensoren. Vær-, klima-, varmtvannsbereder- og luftfukterentiteter fungerer også: du velger hvilke av verdiene som skal leses i neste trinn.",
           "method": "Hvordan de gyldige kildene kombineres til én verdi."
         },
         "sections": {
@@ -217,14 +229,20 @@
             "name": "Avanserte måleinnstillinger",
             "data": {
               "unit": "Utgangsenhet",
-              "device_class": "Enhetsklasse"
+              "device_class": "Enhetsklasse",
+              "read_attributes": "Les et attributt i stedet for tilstanden for noen sensorer"
             },
             "data_description": {
               "unit": "For eksempel °C, °F, hPa eller W. La feltet stå tomt for å beholde lagret enhet, eller hente den fra kildene for en ny hjelper. Kompatible enhetsendringer omregner eksisterende grenser. Andre måleendringer fjerner verdi- og avviksgrenser og slår av spikerejeksjon og endringsbegrensning; se over de neste trinnene. Endring av enhet eller klasse starter filterhistorikken på nytt.",
-              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible."
+              "device_class": "Hva verdien måler. Automatisk bruker kildene; Ingen fjerner enhetsklassen. Klassen og enheten må passe sammen, og kjente kildeklasser må være kompatible.",
+              "read_attributes": "Legger til et trinn der du kan velge å lese et av sensorens attributter i stedet for tilstanden. Vær-, klima- og lignende entiteter får alltid dette trinnet."
             }
           }
         }
+      },
+      "values": {
+        "title": "Velg verdier",
+        "description": "Velg hvilken verdi som skal leses fra hver kilde. Vær-, klima- og lignende entiteter har ingen numerisk tilstand, så et av attributtene deres brukes. Listen viser hver verdi slik den er nå; verdier uten enhet leses i hjelperens enhet. Hvis verdien mangler eller ikke er et tall, utelates kilden, som en utilgjengelig sensor.\n\n{sources}"
       },
       "weights": {
         "title": "Vekting",
@@ -340,7 +358,9 @@
       "incompatible_measurement": "Kildene passer ikke med den valgte utgangsmålingen. Kontroller kildeenhetene og Avanserte måleinnstillinger.",
       "non_finite_number": "Skriv inn et endelig tall.",
       "invalid_device_class": "Velg en enhetsklasse for numeriske sensorer.",
-      "invalid_measurement_unit": "Utgangsenheten er ikke gyldig for denne enhetsklassen. Bruk riktig enhetssymbol, for eksempel °C for temperatur eller W for effekt."
+      "invalid_measurement_unit": "Utgangsenheten er ikke gyldig for denne enhetsklassen. Bruk riktig enhetssymbol, for eksempel °C for temperatur eller W for effekt.",
+      "attribute_required": "Velg en verdi for hver kilde.",
+      "attribute_not_numeric": "Det valgte attributtet finnes ikke på kilden eller er ikke et tall nå. Velg et fra listen."
     }
   },
   "selector": {

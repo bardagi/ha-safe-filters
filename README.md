@@ -78,7 +78,7 @@ are rejected.
 
 | Option | Description |
 |---|---|
-| Source sensor(s) | `sensor`, `number` or `input_number` entities. When combining, drag to reorder; with *Priority*, the first valid one is used. Units are converted automatically when possible (°F → °C, mbar → hPa, …). |
+| Source sensor(s) | `sensor`, `number` or `input_number` entities, or `weather`, `climate`, `water_heater` and `humidifier` entities (see [Reading attributes](#reading-attributes)). When combining, drag to reorder; with *Priority*, the first valid one is used. Units are converted automatically when possible (°F → °C, mbar → hPa, …). |
 | Combine method | Combine only: `min`, `max`, `mean`, `median`, `weighted_mean`, `priority` (first valid source). |
 
 With `weighted_mean`, an extra step asks for a weight per source. Weights are relative (50/30/20 is the same as 5/3/2) and are renormalised over the sources that are valid at the time: if the 50 drops out, the 30 and 20 count 60 % and 40 %. The same step has two optional settings:
@@ -89,6 +89,20 @@ With `weighted_mean`, an extra step asks for a weight per source. Weights are re
 | Offset learning time | 0 min (off) | Renormalising removes a dead source's value, but not its influence: if it read 1 °C above the others, the result drops by its share when it goes away. With this on, the helper learns how far each source usually is from the combined value while all sources are valid, and corrects for it when one drops out, so the value doesn't jump. The time sets how quickly the learned offsets follow changes; 60 min is a good start. If a source's real offset changes while it is gone, the value steps by that change when it comes back. |
 
 A source that dies without becoming `unavailable` (common for battery Zigbee and BLE sensors) keeps counting with its last value. Use *Stale after* for such sources if they report regularly.
+
+#### Reading attributes
+
+Weather, climate, water heater and humidifier entities don't have a numeric state, but their attributes do: for example `humidity` and `temperature` of a weather entity, or `current_temperature` of a thermostat. Select such an entity as a source, and a **Choose values** step asks which value to read. It lists the entity's numeric attributes with their current values, and pre-selects the one that measures the same as your other sources. To read an attribute of a regular sensor instead of its state, tick *Read an attribute instead of the state for some sensors* under **Advanced measurement settings**.
+
+Each source provides one value: its state or one attribute. To use two attributes of the same entity, filter one of them in its own helper and use that as a source.
+
+An attribute that can't be trusted is left out, like an unavailable sensor; it never falls back to another value:
+
+- If the entity is `unavailable` or `unknown`, or the attribute is missing or empty, the source is `unavailable`.
+- If the attribute isn't a number (text such as `NW`, on/off, a list), the source is `non_numeric`.
+- The unit of a weather attribute is read from the entity (`temperature_unit`, `pressure_unit`, …) and converted. If that unit is missing, the source is `unit_mismatch`. Climate and water heater temperatures are in Home Assistant's temperature unit. Other attributes have no unit, so they are read in the helper's unit. The entity's own unit belongs to its state and is never applied to an attribute.
+- Only a change of the attribute itself, or a repeat of all of the entity's values, counts as a new reading for spike rejection and the EMA over readings. A change of the weather condition alone doesn't.
+- *Stale after* uses the last time the entity reported. Weather services often update only every 30–60 minutes, and the setting applies to every source, so set it long enough for them.
 
 ### 2. Data quality
 
@@ -143,7 +157,7 @@ Each chart shows one filter on its own, applied to the same noisy example: grey 
 | `status` | `ok`, `holding` (too few valid sources, a rejected spike or an invalid calculation, showing the last good value) or `restored` (value from before a restart, waiting for fresh data). |
 | `valid_sources` | Number of sources used right now (0 or 1 when filtering one sensor). |
 | `combined_value` | Value before filtering: the combined value (corrected for missing sources when *Offset learning* is on), or the source's own value when filtering one sensor. |
-| `sources` | Per source: converted value and status (`ok`, `unavailable`, `non_numeric`, `unit_mismatch`, `out_of_range`, `stale`, `deviation`). With `weighted_mean` also `share`: the % of the combined value it makes up right now (0 when not used). With *Offset learning* also `offset`: how far it usually is from the combined value. |
+| `sources` | Per source: converted value and status (`ok`, `unavailable`, `non_numeric`, `unit_mismatch`, `out_of_range`, `stale`, `deviation`). For a source read from an attribute also `attribute`: its name. With `weighted_mean` also `share`: the % of the combined value it makes up right now (0 when not used). With *Offset learning* also `offset`: how far it usually is from the combined value. |
 
 `valid_sources`, `combined_value` and `sources` are excluded from the recorder. To avoid a new state (and recorder row) on every source report, the state is written right away only when the value, `status`, availability or a source's status changes. Changes to `combined_value` and the per-source values alone are written at most once a minute.
 
@@ -205,6 +219,13 @@ These are starting points. Adjust them to your sensors and how often they report
 - Method `median`; range 0 to 100 %; max deviation 15; minimum valid sources 2.
 - Moving average 10 min. Decimals 0.
 
+**Outdoor humidity with the weather service as backup**
+- Method `weighted_mean`: your humidity sensors weight 1 each, and the weather entity (e.g. `weather.home` → `humidity`, see [Reading attributes](#reading-attributes)) weight 0. A source with weight 0 is only used when all the others are invalid.
+- Offset learning 60 min, so the value doesn't jump to the weather service's reading when your sensors drop out.
+- Range 0 to 100 %. Minimum valid weight 0 %, so the weather service can take over.
+- Leave *Stale after* off, or longer than the weather service's update interval.
+- Moving average 10 min. Decimals 0.
+
 **Brightness from several sensors**
 - Method `max`: a sensor in shade, behind dirt or under snow reads too low, never too high. Range 0 to 120 000 lx.
 - No spike rejection: sudden changes in light are real.
@@ -235,7 +256,7 @@ Use `weighted_mean` when every source should count, but not equally. `median` tr
 - Offset learning 60 min. The thermostat sits by the radiator and usually reads warm; the learned offset corrects for most of that when it has to take over.
 - Minimum valid weight must stay 0 %. The thermostat carries no weight, so any higher value would stop it from taking over.
 - Leave max deviation off: the thermostat reads differently by design, and a source left out for deviation doesn't get its offset learned.
-- The same works outdoors: a temperature sensor from a weather service at weight 0 keeps the value going when your own sensors are down.
+- The same works outdoors: the temperature of a weather entity at weight 0 keeps the value going when your own sensors are down. A thermostat's `current_temperature` can be used the same way, without a separate sensor.
 
 ### A backup source with `priority`
 
