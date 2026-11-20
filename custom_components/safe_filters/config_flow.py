@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from homeassistant.components import websocket_api
 from homeassistant.components.input_number import DOMAIN as INPUT_NUMBER_DOMAIN
 from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -17,13 +18,23 @@ from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import (
     ATTR_DEVICE_CLASS,
     ATTR_FRIENDLY_NAME,
+    ATTR_ICON,
     PERCENTAGE,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import HomeAssistant, State, split_entity_id
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+    split_entity_id,
+    valid_entity_id,
+)
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.schema_config_entry_flow import (
     SchemaCommonFlowHandler,
     SchemaConfigFlowHandler,
@@ -628,20 +639,26 @@ def _attribute_choices(entity_id: str, state: State | None) -> list[str]:
     )
 
 
-def _choice_label(hass: HomeAssistant, state: State | None, name: str) -> str:
-    """``name: value unit``, with the value the source has right now."""
-    display = "state" if name == STATE_CHOICE else name
+def _value_text(hass: HomeAssistant, state: State | None, name: str) -> str | None:
+    """``value unit`` of the state or an attribute right now; None if not a number."""
     if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-        return display
+        return None
     if name == STATE_CHOICE:
         raw, metadata = state.state, state_metadata(state)
     else:
         raw = state.attributes.get(name)
         metadata = attribute_metadata(state, name, hass.config.units.temperature_unit)
     if numeric_value(raw) is None:
-        return display
+        return None
     unit = metadata.unit if isinstance(metadata.unit, str) else ""
-    return f"{display}: {raw} {unit}".rstrip()
+    return f"{raw} {unit}".rstrip()
+
+
+def _choice_label(hass: HomeAssistant, state: State | None, name: str) -> str:
+    """``name: value unit``, with the value the source has right now."""
+    display = "state" if name == STATE_CHOICE else name
+    text = _value_text(hass, state, name)
+    return display if text is None else f"{display}: {text}"
 
 
 def _same_quantity(first: str | None, second: str | None) -> bool:
@@ -763,6 +780,127 @@ async def _choose_source_step(options: dict[str, Any]) -> str:
     return STEP_SINGLE if is_single(options) else STEP_COMBINE
 
 
+def _preview_sources(user_input: Mapping[str, Any]) -> list[str]:
+    """The entities selected so far in a source form, which is not validated yet."""
+    if is_single(user_input):
+        selected = [user_input[CONF_ENTITY_ID]]
+    else:
+        selected = user_input.get(CONF_ENTITY_IDS)
+    if not isinstance(selected, list):
+        return []
+    return [
+        entity_id
+        for entity_id in selected
+        if isinstance(entity_id, str) and valid_entity_id(entity_id)
+    ]
+
+
+def _preview_text(hass: HomeAssistant, state: State | None, choice: str | None) -> str:
+    """A source's value right now, or else its state: e.g. ``unavailable``."""
+    if choice is not None and (text := _value_text(hass, state, choice)) is not None:
+        return text
+    if state is None:
+        return "—"
+    if choice == STATE_CHOICE or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        return state.state
+    return "—"  # The attribute isn't a number right now.
+
+
+def _preview_value(
+    hass: HomeAssistant,
+    saved: Mapping[str, Any],
+    user_input: Mapping[str, Any],
+    entity_ids: list[str],
+) -> str:
+    """The value each selected source provides right now: ``Name: value · Name: value``.
+
+    Sources that read an attribute show the one saved for them, or else the one the
+    values step would suggest.
+    """
+    if not entity_ids:
+        return STATE_UNKNOWN
+    attributes = source_attributes(saved)
+    target_class = _target_class(
+        hass,
+        {
+            CONF_ENTITY_IDS: entity_ids,
+            CONF_ADVANCED: user_input.get(CONF_ADVANCED),
+            CONF_MEASUREMENT: saved.get(CONF_MEASUREMENT),
+        },
+    )
+    values = []
+    for entity_id in entity_ids:
+        state = hass.states.get(entity_id)
+        choice = _default_choice(
+            entity_id, _attribute_choices(entity_id, state), attributes.get(entity_id), target_class
+        )
+        text = _preview_text(hass, state, choice)
+        if len(entity_ids) > 1:
+            name = state.attributes.get(ATTR_FRIENDLY_NAME, entity_id) if state else entity_id
+            text = f"{name}: {text}"
+        values.append(text)
+    return " · ".join(values)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/start_preview",
+        vol.Required("flow_id"): str,
+        vol.Required("flow_type"): vol.Any("config_flow", "options_flow"),
+        vol.Required("user_input"): dict,
+    }
+)
+@callback
+def ws_start_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Show, live under the source form, what the selected sources read right now."""
+    user_input: dict[str, Any] = msg["user_input"]
+    saved: Mapping[str, Any] = {}
+    name = str(user_input.get(CONF_NAME) or "")
+    if msg["flow_type"] == "options_flow":
+        flow = hass.config_entries.options.async_get(msg["flow_id"])
+        if (entry := hass.config_entries.async_get_entry(flow["handler"])) is not None:
+            saved, name = entry.options, entry.title
+    else:
+        hass.config_entries.flow.async_get(msg["flow_id"])  # Raises if there is no such flow.
+    entity_ids = _preview_sources(user_input)
+
+    @callback
+    def send_preview(_event: Event[EventStateChangedData] | None = None) -> None:
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"],
+                {
+                    "state": _preview_value(hass, saved, user_input, entity_ids),
+                    "attributes": {ATTR_FRIENDLY_NAME: name, ATTR_ICON: "mdi:filter-variant"},
+                },
+            )
+        )
+
+    connection.send_result(msg["id"])
+    send_preview()
+    connection.subscriptions[msg["id"]] = async_track_state_change_event(
+        hass, entity_ids, send_preview
+    )
+
+
+SINGLE_STEP = SchemaFlowFormStep(
+    _single_schema,
+    validate_user_input=_validate_sources,
+    next_step=_next_after_sources,
+    preview=DOMAIN,
+    description_placeholders=_source_placeholders,
+)
+COMBINE_STEP = SchemaFlowFormStep(
+    _combine_schema,
+    validate_user_input=_validate_sources,
+    next_step=_next_after_sources,
+    preview=DOMAIN,
+    description_placeholders=_source_placeholders,
+)
 VALUES_STEP = SchemaFlowFormStep(
     _values_schema,
     validate_user_input=_validate_values,
@@ -789,18 +927,8 @@ FILTERS_STEP = SchemaFlowFormStep(
 
 CONFIG_FLOW = {
     "user": SchemaFlowMenuStep([STEP_SINGLE, STEP_COMBINE]),
-    STEP_SINGLE: SchemaFlowFormStep(
-        _single_schema,
-        validate_user_input=_validate_sources,
-        next_step=_next_after_sources,
-        description_placeholders=_source_placeholders,
-    ),
-    STEP_COMBINE: SchemaFlowFormStep(
-        _combine_schema,
-        validate_user_input=_validate_sources,
-        next_step=_next_after_sources,
-        description_placeholders=_source_placeholders,
-    ),
+    STEP_SINGLE: SINGLE_STEP,
+    STEP_COMBINE: COMBINE_STEP,
     STEP_VALUES: VALUES_STEP,
     "weights": WEIGHTS_STEP,
     "quality": QUALITY_STEP,
@@ -810,18 +938,8 @@ CONFIG_FLOW = {
 OPTIONS_FLOW = {
     # No form of its own: goes straight to the single or combine source form.
     "init": SchemaFlowFormStep(next_step=_choose_source_step),
-    STEP_SINGLE: SchemaFlowFormStep(
-        _single_schema,
-        validate_user_input=_validate_sources,
-        next_step=_next_after_sources,
-        description_placeholders=_source_placeholders,
-    ),
-    STEP_COMBINE: SchemaFlowFormStep(
-        _combine_schema,
-        validate_user_input=_validate_sources,
-        next_step=_next_after_sources,
-        description_placeholders=_source_placeholders,
-    ),
+    STEP_SINGLE: SINGLE_STEP,
+    STEP_COMBINE: COMBINE_STEP,
     STEP_VALUES: VALUES_STEP,
     "weights": WEIGHTS_STEP,
     "quality": QUALITY_STEP,
@@ -839,6 +957,11 @@ class SafeFiltersConfigFlow(SchemaConfigFlowHandler, domain=DOMAIN):
 
     config_flow = CONFIG_FLOW
     options_flow = OPTIONS_FLOW
+
+    @staticmethod
+    async def async_setup_preview(hass: HomeAssistant) -> None:
+        """Set up the websocket command behind the source form preview."""
+        websocket_api.async_register_command(hass, ws_start_preview)
 
     def async_config_entry_title(self, options: Mapping[str, Any]) -> str:
         """Return config entry title."""
